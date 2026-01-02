@@ -1,0 +1,80 @@
+local rs = game:GetService("ReplicatedStorage")
+
+local AnimationManager = {}
+
+local cache = {}
+
+
+--Nen
+local chargeNenAnim = rs.NenAbilities.Killua.KilluaAnims.ChargeNenAnim
+
+--Kite
+local barragePoseAnim = rs.NenAbilities.Kite.KiteAnims.barragePose
+local barrageAnim = rs.NenAbilities.Kite.KiteAnims.barrageAnim
+local scytheSwingAnim1 = rs.NenAbilities.Kite.KiteAnims["scytheM1 (1)"]
+local scytheSwingAnim2 = rs.NenAbilities.Kite.KiteAnims["scytheM1 (2)"]
+local scytheSwingAnim3 = rs.NenAbilities.Kite.KiteAnims["scytheM1 (3)"]
+local scytheSwingAnim4 = rs.NenAbilities.Kite.KiteAnims["scytheM1 (4)"]
+local scytheSwingAnim5 = rs.NenAbilities.Kite.KiteAnims["scytheM1 (5)"]
+local scytheDash = rs.NenAbilities.Kite.KiteAnims.scytheDash
+
+--Gon
+local rockAnim = rs.NenAbilities.Gon.GonAnims.RockAnim
+local paperAnim = rs.NenAbilities.Gon.GonAnims.PaperAnim
+local scissorAnim = rs.NenAbilities.Gon.GonAnims.ScissorAnim
+
+--Killua
+local thunderboltAnim = rs.NenAbilities.Killua.KilluaAnims.Thunderbolt
+local thunderboltAnim2 = rs.NenAbilities.Killua.KilluaAnims["Thunderbolt(2)"]
+local palmChargeAnim = rs.NenAbilities.Killua.KilluaAnims.PalmChargeUp
+local palmRushAnim = rs.NenAbilities.Killua.KilluaAnims.PalmRush
+local thunderComboAnim = rs.NenAbilities.Killua.KilluaAnims.thunderCombo
+local thunderHurtAnim = rs.NenAbilities.Killua.KilluaAnims.thunderHurt
+
+
+function AnimationManager:GetAnimations(character)
+	
+	if cache[character] then
+		return cache[character]
+	end
+	local humanoid = character:WaitForChild("Humanoid")
+	local animator = humanoid:WaitForChild("Animator")
+	
+
+	
+	local clips = {
+		chargeNenClip = animator:LoadAnimation(chargeNenAnim),
+		
+		barragePoseClip = animator:LoadAnimation(barragePoseAnim),
+		barrageClip = animator:LoadAnimation(barrageAnim),
+		scytheClip1 = animator:LoadAnimation(scytheSwingAnim1),
+		scytheClip2 = animator:LoadAnimation(scytheSwingAnim2),
+		scytheClip3 = animator:LoadAnimation(scytheSwingAnim3),
+		scytheClip4 = animator:LoadAnimation(scytheSwingAnim4),
+		scytheClip5 = animator:LoadAnimation(scytheSwingAnim5),
+		scytheDashClip = animator:LoadAnimation(scytheDash),
+		
+		rockClip = animator:LoadAnimation(rockAnim),
+		paperClip = animator:LoadAnimation(paperAnim),
+		scissorClip = animator:LoadAnimation(scissorAnim),
+		
+		thunderboltClip = animator:LoadAnimation(thunderboltAnim),
+		thunderboltClip2 = animator:LoadAnimation(thunderboltAnim2),
+		palmChargeClip = animator:LoadAnimation(palmChargeAnim),
+		palmRushClip = animator:LoadAnimation(palmRushAnim),
+		thunderComboClip = animator:LoadAnimation(thunderComboAnim),
+		thunderHurtClip = animator:LoadAnimation(thunderHurtAnim),
+	}	
+
+	cache[character] = clips
+	return clips
+
+end
+
+
+
+function AnimationManager:ClearCache(character)
+	cache[character] = nil
+end
+
+return AnimationManager
