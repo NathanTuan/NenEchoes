@@ -1,0 +1,171 @@
+local userInput = game:GetService("UserInputService")
+local m1Event = game:GetService("ReplicatedStorage").RemoteEvents.CombatEvents.M1
+local isOnCooldown = false
+local m1IdleFunction = game:GetService("ReplicatedStorage").BindableFunctions.M1Function
+local player = game:GetService("Players").LocalPlayer
+local rs = game:GetService("ReplicatedStorage")
+local fireCD = false
+local mouse = player:GetMouse()
+local activateM1Event = rs.RemoteEvents.CombatEvents.ActivateM1Event
+local rollEvent = rs.RemoteEvents.MovementEvents.RollEvent
+local sphereEvent = rs.RemoteEvents.NenAbilities.NobunagaMoves.CounterSphereEvent
+
+
+
+local tweenService = game:GetService("TweenService")
+local tweenInfo = TweenInfo.new(0.7, Enum.EasingStyle.Quad)
+--local moveSetGui = game.StarterGui.MoveSetGui
+
+local cooldowns = require(game.ReplicatedStorage.Cooldowns)
+local zdb = false
+local xdb = false
+local cdb = false
+local rolldb = false
+local m1db = false
+
+local slotFunction = player:WaitForChild("PlayerGui").Main.Frame.SlotUIFunction
+local frame = player:WaitForChild("PlayerGui").Main.Frame
+
+
+local TweenService = game:GetService("TweenService")
+
+
+
+
+
+userInput.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	if input.UserInputType == Enum.UserInputType.MouseButton1 then
+		local target = mouse.Hit.Position
+		if player.Character:GetAttribute("AbilityEnabled") == false then
+			if player.Character:GetAttribute("M1Activated") == true and player.Character:GetAttribute("Cooldown") == false then
+				m1Event:FireServer()
+			end
+		else
+			if player.Character:GetAttribute("NenAbility") == "Kite" then
+				if player.Character:GetAttribute("Weapon") == "SpawnedGun" then
+					rs.RemoteEvents.NenAbilities.KiteMoves.SpawnedGun.FireGun:FireServer(target)
+				elseif player.Character:GetAttribute("Weapon") == "SpawnedScythe"then
+					rs.RemoteEvents.NenAbilities.KiteMoves.SpawnedScythe.ScytheM1Event:FireServer(target)
+				end
+			else
+				m1Event:FireServer()
+			end
+		end
+		
+		
+	end
+	
+	
+	if input.KeyCode == Enum.KeyCode.Z then
+		local target = mouse.Hit.Position
+		target = Vector3.new(target.X, player.Character.HumanoidRootPart.Position.Y, target.Z)
+		if player.Character:GetAttribute("AbilityEnabled") == true then
+			if player.Character:GetAttribute("NenAbility") == "Kite" then
+				if player.Character:GetAttribute("HeadOut") == true then
+					rs.RemoteEvents.NenAbilities.KiteMoves.SpinEvent:FireServer()
+				end
+			else 
+				
+				if player.Character:GetAttribute("NenAbility") == "Gon" then
+					rs.RemoteEvents.NenAbilities[player.Character:GetAttribute("NenAbility").."Moves"].Z:FireServer(target, false)
+				
+				else
+					rs.RemoteEvents.NenAbilities[player.Character:GetAttribute("NenAbility").."Moves"].Z:FireServer(target)	
+				end
+				
+			
+			end
+		end
+	end
+	
+	if input.KeyCode == Enum.KeyCode.X then
+		local target = mouse.Hit.Position
+		target = Vector3.new(target.X, player.Character.HumanoidRootPart.Position.Y, target.Z)
+		if player.Character:GetAttribute("AbilityEnabled") == true then
+			
+			if player.Character:GetAttribute("NenAbility") == "Kite" then
+				if player.Character:GetAttribute("Weapon") == "SpawnedGun" then
+					rs.RemoteEvents.NenAbilities.KiteMoves.SpawnedGun.X:FireServer(target)
+				elseif player.Character:GetAttribute("Weapon") == "SpawnedScythe" then
+					rs.RemoteEvents.NenAbilities.KiteMoves.SpawnedScythe.X:FireServer()
+				end
+			else
+				if player.Character:GetAttribute("NenAbility") == "Gon" then
+					rs.RemoteEvents.NenAbilities[player.Character:GetAttribute("NenAbility").."Moves"].X:FireServer(target, false)
+				
+				else
+					rs.RemoteEvents.NenAbilities[player.Character:GetAttribute("NenAbility").."Moves"].X:FireServer(target)
+				end
+			end
+			
+			
+		end
+	end
+	
+	if input.KeyCode == Enum.KeyCode.C then
+		local target = mouse.Hit.Position
+		target = Vector3.new(target.X, player.Character.HumanoidRootPart.Position.Y, target.Z)
+		if player.Character:GetAttribute("AbilityEnabled") == true then
+			if player.Character:GetAttribute("NenAbility") == "Kite" then
+				if player.Character:GetAttribute("Weapon") == "SpawnedGun" then
+					rs.RemoteEvents.NenAbilities.KiteMoves.SpawnedGun.C:FireServer(target)
+				elseif player.Character:GetAttribute("Weapon") == "SpawnedScythe" then
+					rs.RemoteEvents.NenAbilities.KiteMoves.SpawnedScythe.C:FireServer()
+				end
+			else
+				rs.RemoteEvents.NenAbilities[player.Character:GetAttribute("NenAbility").."Moves"].C:FireServer(target)
+			end
+		end
+		
+	end
+	
+	if input.KeyCode == Enum.KeyCode.V then
+		local target = mouse.Hit.Position
+		if player.Character:GetAttribute("AbilityEnabled") == true then
+			rs.RemoteEvents.NenAbilities[player.Character:GetAttribute("NenAbility").."Moves"].V:FireServer(target)
+		end
+	end
+
+	
+	if input.KeyCode == Enum.KeyCode.Q then
+		rollEvent:FireServer()
+		--print("Reached")
+		if player.Character:GetAttribute("Driving") == true then
+			rs.RemoteEvents.MovementEvents.BoatFlyEvent:FireServer("Down")
+		end
+	end
+end)
+
+userInput.InputEnded:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	
+	if input.KeyCode == Enum.KeyCode.Q then
+		if player.Character:GetAttribute("Driving") == true then
+			rs.RemoteEvents.MovementEvents.BoatFlyEvent:FireServer("")
+		end
+	end
+end)
+
+
+
+rs.RemoteEvents.CombatEvents.BlockEvent.OnClientEvent:Connect(function()
+	rs.RemoteEvents.CombatEvents.BlockEvent:FireServer()
+end)
+
+rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors.OnClientEvent:Connect(function(enemyNPC, damage)
+	rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireServer(enemyNPC, damage)
+end)
+
+
+
+rs.RemoteEvents.CombatEvents.Ragdoll.OnClientEvent:Connect(function(bool)
+	if bool == true then
+
+		player.Character.Humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+		player.Character.Humanoid.PlatformStand = true
+	else
+		player.Character.Humanoid.PlatformStand = false
+		player.Character.Humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+	end
+end)
