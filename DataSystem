@@ -1,0 +1,740 @@
+--StatsDataStore = game:GetService("DataStoreService"):GetDataStore("StatsDataStore")
+local rs = game:GetService("ReplicatedStorage")
+local ss = game:GetService("ServerStorage")
+local Strength = game.ReplicatedStorage.StatRemoteEvents:WaitForChild("Strength")
+local Currency = game.ReplicatedStorage.StatRemoteEvents:WaitForChild("Currency")
+local Health = game.ReplicatedStorage.StatRemoteEvents:WaitForChild("Health")
+local Nen = game.ReplicatedStorage.StatRemoteEvents:WaitForChild("Nen")
+local Stamina = game.ReplicatedStorage.StatRemoteEvents:WaitForChild("Stamina")
+local XPEvent = game.ReplicatedStorage.StatRemoteEvents:WaitForChild("XP")
+local Level = game.ReplicatedStorage.StatRemoteEvents:WaitForChild("Level")
+local StatUpdate = game.ReplicatedStorage.StatRemoteEvents:WaitForChild("StatUpdate")
+
+local masteriesList = {"Kite", "Killua"} 
+local tweenService = game:GetService("TweenService")
+local uiTweenInfo = TweenInfo.new(2, Enum.EasingStyle.Linear)
+local DataStore = game:GetService("DataStoreService"):GetDataStore("NenEchoesTest2DataStore")
+local masteriesList = {"Kite", "Killua"}
+
+--moduleStuff
+local inventoryModule = require(ss.DataStoreModules.InventoryModule)
+local inventoryText = require(rs.InventoryText)
+
+game.Players.PlayerAdded:Connect(function(player)
+	-- Setup folders & values --
+	local leaderstats = Instance.new("Folder")
+	leaderstats.Name = "Stats"
+	leaderstats.Parent = player
+	
+	local clothesFolder = Instance.new("Folder")
+	clothesFolder.Name = "ClothesIDs"
+	clothesFolder.Parent=  player
+	local hairNum = Instance.new("IntValue")
+	hairNum.Name = "HairNum"
+	hairNum.Parent = clothesFolder
+	local shirtNum = Instance.new("IntValue")
+	shirtNum.Name = "ShirtNum"
+	shirtNum.Parent = clothesFolder
+	local pantsNum = Instance.new("IntValue")
+	pantsNum.Name = "PantsNum"
+	pantsNum.Parent = clothesFolder
+	local sleevesNum = Instance.new("IntValue")
+	sleevesNum.Name = "SleevesNum"
+	sleevesNum.Parent = clothesFolder
+	local shoesNum = Instance.new("IntValue")
+	shoesNum.Name = "ShoesNum"
+	shoesNum.Parent = clothesFolder
+	local eyesNum = Instance.new("IntValue")
+	eyesNum.Name = "EyesNum"
+	eyesNum.Parent = clothesFolder
+	local noseNum = Instance.new("IntValue")
+	noseNum.Name = "NoseNum"
+	noseNum.Parent = clothesFolder
+	local mouthNum = Instance.new("IntValue")
+	mouthNum.Name = "MouthNum"
+	mouthNum.Parent = clothesFolder
+
+	local masteriesFolder = Instance.new("Folder")
+	masteriesFolder.Name = "Masteries"
+	masteriesFolder.Parent = leaderstats
+
+	for _, masteryName in ipairs(masteriesList) do
+		local masteryFolder = Instance.new("Folder")
+		masteryFolder.Name = masteryName
+		masteryFolder.Parent = masteriesFolder
+
+		local levelVal = Instance.new("IntValue")
+		levelVal.Name = "Level"
+		levelVal.Value = 1
+		levelVal.Parent = masteryFolder
+
+		local xpVal = Instance.new("IntValue")
+		xpVal.Name = "XP"
+		xpVal.Value = 0
+		xpVal.Parent = masteryFolder
+	end
+
+	local function createStat(name, default)
+		local val = Instance.new("IntValue")
+		val.Name = name
+		val.Value = default or 0
+		val.Parent = leaderstats
+		return val
+	end
+
+	local XP = createStat("XP", 0)
+	local Level = createStat("Level", 1)
+	local Strength = createStat("Strength", 0)
+	local Nen = createStat("Nen", 0)
+	local Health = createStat("Health", 0)
+	local Stamina = createStat("Stamina", 0)
+	local Points = createStat("Points", 0)
+
+	local inventoryFolder = Instance.new("Folder")
+	inventoryFolder.Name = "Inventory"
+	inventoryFolder.Parent = player
+	rs.StatRemoteEvents.StartInventoryUI:FireClient(player, inventoryFolder)
+	
+	local hotbarFolder = Instance.new("Folder")
+	hotbarFolder.Name = "Hotbar"
+	hotbarFolder.Parent = player
+	
+
+	local questFolder = Instance.new("Folder")
+	questFolder.Name = "Quests"
+	questFolder.Parent = player
+	rs.StatRemoteEvents.StartQuestUI:FireClient(player, questFolder)
+	
+	--Loading Dataaaa
+	local savedData
+	local attempts, maxAttempts = 0, 3
+	local success, err
+	repeat
+		attempts += 1
+		success, err = pcall(function()
+			savedData = DataStore:GetAsync(player.UserId)
+			
+		end)
+		if not success then
+			warn("Data load error for", player.Name, "(attempt "..attempts.."):", err)
+			task.wait(3)
+		end
+	until success or attempts >= maxAttempts
+	if savedData then
+		-- Load stats
+		task.spawn(function()
+			local statAttempts, maxStatAttempts = 0, 3
+			local statSuccess, statErr
+			repeat
+				statAttempts += 1
+				statSuccess, statErr = pcall(function()
+					
+					local stats = savedData.Stats or {}
+					XP.Value = stats.XP or 0
+					Level.Value = stats.Level or 1
+					Strength.Value = stats.Strength or 0
+					Nen.Value = stats.Nen or 0
+					Health.Value = stats.Health or 0
+					Stamina.Value = stats.Stamina or 0
+					Points.Value = stats.Points or 0
+					
+					local savedMasteries = savedData.Masteries or {}
+					for masteryName, masteryFolder in pairs(masteriesFolder:GetChildren()) do
+						local savedMastery = savedMasteries[masteryName]
+						if savedMastery then
+							masteryFolder.Level.Value = savedMastery.Level or 0
+							masteryFolder.XP.Value = savedMastery.XP or 0
+						end
+					end
+					
+					player:WaitForChild("PlayerGui"):WaitForChild("Main").Bars.TextLabel.Text = "Level: "..tostring(player.Stats.Level.Value)
+					player:WaitForChild("PlayerGui"):WaitForChild("wheel").StatsFrame.ScrollingFrame.HeaderItem.AvailablePoints.Text = "Available Points: "..tostring(player.Stats.Points.Value)
+					local scroll = player:WaitForChild("PlayerGui"):WaitForChild("wheel").StatsFrame.ScrollingFrame
+
+					for _, v in pairs(scroll:GetChildren()) do
+						if v:IsA("Frame") and v.Name ~= "HeaderItem" and v.Name ~= "BottomBuffer" then
+							local stat = string.sub(tostring(v.Name), 1, -5)
+							v.ItemLevel.Level.Text = tostring(player.Stats[stat].Value)
+						end
+					end
+				end)
+				if not statSuccess then
+					warn("Stats load error for", player.Name, "(attempt "..statAttempts.."):", statErr)
+					task.wait((3)*(statAttempts+1)) -- apparently this thing called "exponential backoff." Shoutout Gemini
+				end
+			until statSuccess or statAttempts >= maxStatAttempts
+		end)
+		
+		-- Load Clothes
+		task.spawn(function()
+			local clothesAttempts, maxClothesAttempts = 0, 3
+			local clothesSuccess, clothesErr
+			repeat
+				clothesAttempts += 1
+				clothesSuccess, clothesErr = pcall(function()
+					local clothes = savedData.Clothes or {}
+					hairNum.Value = clothes.Hair or 1
+					shirtNum.Value = clothes.Shirt or 1
+					sleevesNum.Value = clothes.Sleeves or 1
+					pantsNum.Value = clothes.Pants or 1
+					shoesNum.Value = clothes.Shoes or 1
+					eyesNum.Value = clothes.Eyes or 1
+					noseNum.Value = clothes.Nose or 1
+					mouthNum.Value = clothes.Mouth or 1
+
+					for _, values in pairs(clothesFolder:GetChildren()) do
+						if values.Value == 0 then
+							values.Value = 1
+						end
+					end
+					
+					updateClothes(player)
+				end)
+				if not clothesSuccess then
+					warn("Clothes load error for", player.Name, "(attempt "..clothesAttempts.."):", clothesErr)
+					task.wait((3)*(clothesAttempts+1))
+				end
+			until clothesSuccess or clothesAttempts >= maxClothesAttempts
+		end)
+	
+		
+
+		-- Load inventory/hotbar
+		task.spawn(function()
+			local inventoryAttempts, maxInventoryAttempts = 0, 3
+			local inventorySuccess, inventoryErr
+			repeat
+				inventoryAttempts += 1
+				inventorySuccess, inventoryErr = pcall(function()
+					local savedInventory = savedData.Inventory or {}
+					for itemName, qty in pairs(savedInventory) do
+						local item = Instance.new("IntValue")
+						item.Parent = inventoryFolder
+						item.Name = itemName
+						item.Value = math.clamp(qty, 0, inventoryText[itemName]["MaxQty"])
+						--print(item.Name.." added to folder.")
+						
+						
+					end
+					
+					
+					local savedHotbar = savedData.Hotbar or {}
+					for itemName, slotNum in pairs(savedHotbar) do
+						local item = Instance.new("IntValue")
+						item.Parent = hotbarFolder
+						item.Name = itemName
+						item.Value = slotNum
+					end
+					rs.StatRemoteEvents.HotbarUpdateEvent:FireClient(player)
+				end)
+				if not inventorySuccess then
+					warn("Clothes load error for", player.Name, "(attempt "..inventoryAttempts.."):", inventoryErr)
+					task.wait((3)*(inventoryAttempts+1))
+				end
+			until inventorySuccess or inventoryAttempts >= maxInventoryAttempts
+		end)
+		
+		
+		
+		-- Load Quests
+		--[[]]
+		task.spawn(function()
+			local questAttempts, maxQuestAttempts = 0, 3
+			local questSuccess, questErr
+			repeat
+				questAttempts += 1
+				questSuccess, questErr = pcall(function()
+					local questData = savedData.Quests or {}
+					local questsFolder = player.Quests
+					for islandName, batches in pairs(questData) do
+
+						local islandFolder = Instance.new("Folder")
+						islandFolder.Name = islandName
+						islandFolder.Parent = questsFolder
+
+						for batchName, batchData in pairs(batches) do
+
+							local batchFolder = Instance.new("Folder")
+							batchFolder.Name = batchName
+							batchFolder.Parent = islandFolder
+
+							local progressValue = Instance.new("IntValue")
+							progressValue.Name = "Progress"
+							progressValue.Parent = batchFolder
+							progressValue.Value = batchData.Progress 
+						end
+					end
+				end)
+				if not questSuccess then
+					warn("Quests load error for", player.Name, "(attempt "..questAttempts.."):"..questErr)
+					task.wait((3)*(questAttempts+1))
+				end
+			until questSuccess or questAttempts >= maxQuestAttempts
+		end)
+		
+	
+		
+		rs:WaitForChild("StatRemoteEvents"):WaitForChild("ClientLoadEvent"):FireClient(player)
+		
+		
+	else
+		print("Data created for "..player.Name)
+		local stats = {}
+		XP.Value = 0
+		Level.Value = 1
+		Strength.Value = 0
+		Nen.Value = 0
+		Health.Value = 0
+		Stamina.Value =  0
+		Points.Value = 0
+
+		-- Load Clothes
+
+		local clothes = {}
+		hairNum.Value =  1
+		shirtNum.Value = 1
+		sleevesNum.Value = 1
+		pantsNum.Value =  1
+		shoesNum.Value = 1
+		eyesNum.Value = 1
+		noseNum.Value =  1
+		mouthNum.Value = 1
+
+
+		-- Load masteries
+		local savedMasteries = {}
+
+		-- Load inventory
+
+		local savedInventory = {}
+
+		-- Load Quests
+
+		local questData = {}
+		
+
+		player:WaitForChild("PlayerGui"):WaitForChild("Main").Bars.TextLabel.Text = "Level: "..tostring(player.Stats.Level.Value)
+		player:WaitForChild("PlayerGui"):WaitForChild("wheel").StatsFrame.ScrollingFrame.HeaderItem.AvailablePoints.Text = "Available Points: "..tostring(player.Stats.Points.Value)
+		updateClothes(player)
+
+
+		local scroll = player:WaitForChild("PlayerGui"):WaitForChild("wheel").StatsFrame.ScrollingFrame
+
+		for _, v in pairs(scroll:GetChildren()) do
+			if v:IsA("Frame") and v.Name ~= "HeaderItem" and v.Name ~= "BottomBuffer" then
+				local stat = string.sub(tostring(v.Name), 1, -5)
+				v.ItemLevel.Level.Text = tostring(player.Stats[stat].Value)
+			end
+		end
+
+		rs:WaitForChild("StatRemoteEvents"):WaitForChild("ClientLoadEvent"):FireClient(player)
+
+	end
+	
+end)
+
+game.Players.PlayerRemoving:Connect(function(player)
+	local attempts, maxAttempts = 0, 3
+	local success, err
+	repeat
+		attempts += 1
+		success, err = pcall(function()
+			local masteryData = {}
+			for _, masteryFolder in pairs(player.Stats.Masteries:GetChildren()) do
+				masteryData[masteryFolder.Name] = {
+					Level = masteryFolder.Level.Value,
+					XP = masteryFolder.XP.Value,
+				}
+			end
+			
+			local questData = {}
+			
+			for _, quest in pairs(player.Quests:GetChildren()) do
+				questData[quest.Name] = {}
+				for _, batch in pairs(quest:GetChildren()) do
+					if batch:FindFirstChild("Progress") then 
+						questData[quest.Name][batch.Name] = {
+							Progress = batch.Progress.Value
+						}
+					end
+				end
+			end
+
+			local inventoryData = {}
+			
+			for _, item in pairs(player.Inventory:GetChildren()) do
+				inventoryData[item.Name] = item.Value
+				--print("saving "..item.Name)
+			end
+			
+			local hotbarData = {}
+			for _, item in pairs(player.Hotbar:GetChildren()) do
+				hotbarData[item.Name] = item.Value
+			end
+			
+			local dataToSave = {
+				Stats = {
+					XP = player.Stats.XP.Value,
+					Level = player.Stats.Level.Value,
+					--Currency = player.Stats.Currency.Value,
+					Strength = player.Stats.Strength.Value,
+					Nen = player.Stats.Nen.Value,
+					Health = player.Stats.Health.Value,
+					Stamina = player.Stats.Stamina.Value,
+					Points = player.Stats.Points.Value,
+				},
+				Masteries = masteryData,
+				Inventory = inventoryData,
+				Hotbar = hotbarData,
+				Quests = questData,
+				Clothes = {
+					Hair = player.ClothesIDs.HairNum.Value,
+					Shirt = player.ClothesIDs.ShirtNum.Value,
+					Sleeves = player.ClothesIDs.SleevesNum.Value,
+					Pants = player.ClothesIDs.PantsNum.Value,
+					Shoes = player.ClothesIDs.ShoesNum.Value,
+					Eyes = player.ClothesIDs.EyesNum.Value,
+					Nose = player.ClothesIDs.NoseNum.Value,
+					Mouth = player.ClothesIDs.MouthNum.Value,
+				},
+			}
+		
+			DataStore:UpdateAsync(player.UserId, function(oldData)
+				return dataToSave
+			end)
+
+			--print("Saved data for", player.Name)
+		end)
+		if not success then
+			--warn("Data save error for", player.Name, "(attempt "..attempts.."):", err)
+			task.wait(3)
+		end
+	until success or attempts >= maxAttempts
+end)
+
+
+
+Strength.OnServerEvent:Connect(function(player)
+	if player.Stats.Points.Value >= 1 then
+		player.Stats.Strength.Value += 1
+	end
+end)
+Nen.OnServerEvent:Connect(function(player)
+	if player.Stats.Points.Value >= 1 then
+		player.Stats.Nen.Value += 1
+	end
+end)
+Health.OnServerEvent:Connect(function(player)
+	if player.Stats.Points.Value >= 1 then
+		player.Stats.Health.Value += 1
+		local hum = player.Character:WaitForChild("Humanoid")
+		if hum then
+			hum.MaxHealth = 100 + player.Stats.Health.Value
+		end
+		
+	end
+end)
+Stamina.OnServerEvent:Connect(function(player)
+	if player.Stats.Points.Value >= 1 then
+		player.Stats.Stamina.Value += 1
+	end
+end)
+
+
+
+
+Level.OnServerEvent:Connect(function(player)
+	
+	player.Stats.Points.Value += 3
+	for _, v in pairs(player.Character:GetChildren()) do
+		if v.Name == "Right Arm" or v.Name == "Left Arm" or v.Name == "Right Leg" or v.Name == "Left Leg" then
+			local levelVFX = rs.VFX.gameProgVFX.StarVFXOther:Clone()
+			levelVFX.Position = v.Position
+			levelVFX.Parent = v
+			levelVFX.Motor6D.Part0 = v
+			game.Debris:AddItem(levelVFX, 1.5)
+		elseif v.Name == "Torso" then
+			local levelVFX = rs.VFX.gameProgVFX.StarVFXTorso:Clone()
+			levelVFX.Position = v.Position
+			levelVFX.Parent = v
+			levelVFX.Motor6D.Part0 = v
+			game.Debris:AddItem(levelVFX, 1.5)
+		end
+	end
+end)
+
+
+XPEvent.OnServerEvent:Connect(function(player, points)
+	
+	local xpGui = rs.UIObjects.XPNotiLabel:Clone()
+	xpGui.Parent = player:WaitForChild("PlayerGui").Main.Notifications
+	xpGui.TextLabel.Text = "Received "..tostring(points).." XP"
+	local tween = tweenService:Create(xpGui, uiTweenInfo, {GroupTransparency = 1}):Play()
+	task.delay(2, function()
+		xpGui:Destroy()	
+	end)
+	
+	player.Stats.XP.Value += points
+	while player.Stats.XP.Value >= (100 + (player.Stats.Level.Value-1)*100) do
+		player.Stats.XP.Value-= (100 + (player.Stats.Level.Value-1)*100)
+		player.Stats.Level.Value+=1
+		player.Stats.Points.Value += 3
+		
+		--XP Stuff
+		for _, v in pairs(player.Character:GetChildren()) do
+			if v.Name == "Right Arm" or v.Name == "Left Arm" or v.Name == "Right Leg" or v.Name == "Left Leg" then
+				local levelVFX = rs.VFX.gameProgVFX.StarVFXOther:Clone()
+				levelVFX.Position = v.Position
+				levelVFX.Parent = v
+				levelVFX.Motor6D.Part0 = v
+				game.Debris:AddItem(levelVFX, 2.5)
+				task.delay(2, function()
+					for _, emitter in pairs(levelVFX.Attachment:GetChildren()) do
+						emitter.Enabled = false
+					end
+				end)
+			elseif v.Name == "Torso" then
+				local levelVFX = rs.VFX.gameProgVFX.StarVFXTorso:Clone()
+				levelVFX.Position = v.Position
+				levelVFX.Parent = v
+				levelVFX.Motor6D.Part0 = v
+				game.Debris:AddItem(levelVFX, 2.5)
+				task.delay(2, function()
+					for _, emitter in pairs(levelVFX.Attachment:GetChildren()) do
+						emitter.Enabled = false
+					end
+				end)
+			end
+		end
+		
+		--UI Stuff
+		local levelGui = rs.UIObjects.LevelNotiLabel:Clone()
+		levelGui.Parent = player:WaitForChild("PlayerGui").Main.Notifications
+		levelGui.TextLabel.Text = "Leveled Up!"
+		local tween = tweenService:Create(levelGui, uiTweenInfo, {GroupTransparency = 1})
+		task.delay(2, function()
+			levelGui:Destroy()
+		end)
+		
+		player.PlayerGui.Main.Bars.TextLabel.Text = "Level: "..tostring(player.Stats.Level.Value)
+		player:WaitForChild("PlayerGui"):WaitForChild("wheel").StatsFrame.ScrollingFrame.HeaderItem.AvailablePoints.Text = "Available Points: "..tostring(player.Stats.Points.Value)
+	end
+	
+end)
+
+StatUpdate.OnServerEvent:Connect(function(player)
+	player.PlayerGui.wheel.StatsFrame.ScrollingFrame.StrengthItem.ItemLevel.Level.Text = player.Stats.Strength.Value
+	player.PlayerGui.wheel.StatsFrame.ScrollingFrame.NenItem.ItemLevel.Level.Text = player.Stats.Nen.Value
+	player.PlayerGui.wheel.StatsFrame.ScrollingFrame.HealthItem.ItemLevel.Level.Text = player.Stats.Health.Value
+	player.PlayerGui.wheel.StatsFrame.ScrollingFrame.StaminaItem.ItemLevel.Level.Text = player.Stats.Stamina.Value
+	if player.Stats.Points.Value >= 1 then
+		player.Stats.Points.Value -= 1
+		player:WaitForChild("PlayerGui"):WaitForChild("wheel").StatsFrame.ScrollingFrame.HeaderItem.AvailablePoints.Text = "Available Points: "..tostring(player.Stats.Points.Value)
+	end
+end)
+
+
+game:BindToClose(function()
+
+	print("Server shutting down... Attempting to save all player data.")
+
+	for _, player in pairs(game.Players:GetPlayers()) do
+		local attempts, maxAttempts = 0, 3
+		local success, err
+		repeat
+			attempts += 1
+			success, err = pcall(function()
+				local masteryData = {}
+				for _, masteryFolder in pairs(player.Stats.Masteries:GetChildren()) do
+					masteryData[masteryFolder.Name] = {
+						Level = masteryFolder.Level.Value,
+						XP = masteryFolder.XP.Value,
+					}
+				end
+
+				local inventoryData = {}
+				for _, item in pairs(player.Inventory:GetChildren()) do
+					inventoryData[item.Name] = item.Value
+				end
+				
+				local hotbarData = {}
+				for _, item in pairs(player.Hotbar:GetChildren()) do
+					hotbarData[item.Name] = item.Value
+				end
+
+				local questData = {}
+				for _, quest in pairs(player.Quests:GetChildren()) do
+					questData[quest.Name] = {}
+					for _, batch in pairs(quest:GetChildren()) do
+						if batch:FindFirstChild("Progress") then 
+							questData[quest.Name][batch.Name] = {
+								Progress = batch.Progress.Value
+							}
+						end
+					end
+				end
+				
+				local dataToSave = {
+					Stats = {
+						XP = player.Stats.XP.Value,
+						Level = player.Stats.Level.Value,
+						--Currency = player.Stats.Currency.Value,
+						Strength = player.Stats.Strength.Value,
+						Nen = player.Stats.Nen.Value,
+						Health = player.Stats.Health.Value,
+						Stamina = player.Stats.Stamina.Value,
+						Points = player.Stats.Points.Value,
+					},
+					
+					Clothes = {
+						Hair = player.ClothesIDs.HairNum.Value,
+						Shirt = player.ClothesIDs.ShirtNum.Value,
+						Sleeves = player.ClothesIDs.SleevesNum.Value,
+						Pants = player.ClothesIDs.PantsNum.Value,
+						Shoes = player.ClothesIDs.ShoesNum.Value,
+						Eyes = player.ClothesIDs.EyesNum.Value,
+						Nose = player.ClothesIDs.NoseNum.Value,
+						Mouth = player.ClothesIDs.MouthNum.Value,
+					},
+					
+					Masteries = masteryData,
+					Inventory = inventoryData,
+					Hotbar = hotbarData,
+					Quests = questData,
+				}
+
+				DataStore:UpdateAsync(player.UserId, function(oldData)
+					return dataToSave
+				end)
+
+				print("Saved data for", player.Name)
+			end)
+			if not success then
+				warn("Data save error for", player.Name, "(attempt "..attempts.."):", err)
+				task.wait(3)
+			end
+		until success or attempts >= maxAttempts
+	end
+
+	print("All shutdown saves attempted. Server will now close.")
+end)
+
+
+local hairArray = ss.Outfits.Hairs:GetChildren()
+local shirtArray = ss.Outfits.Shirts:GetChildren()
+local sleevesArray = ss.Outfits.Sleeves:GetChildren()
+local pantsArray = ss.Outfits.Pants:GetChildren()
+local shoesArray = ss.Outfits.Shoes:GetChildren()
+local eyesArray  = ss.Outfits.Eyes:GetChildren()
+local nosesArray = ss.Outfits.Noses:GetChildren()
+local mouthsArray = ss.Outfits.Mouths:GetChildren()
+
+
+function updateClothes(player)	
+	for _, v in pairs(player.Character:WaitForChild("Clothes"):GetChildren()) do
+		--print(v.Name)
+		v:Destroy()
+	end
+	for _, v in pairs(player.Character:WaitForChild("Head"):GetChildren()) do
+		if v:IsA("Decal") then
+			v:Destroy()
+		end
+	end
+	local hairID = player:WaitForChild("ClothesIDs"):WaitForChild("HairNum").Value
+	local shirtID = player:WaitForChild("ClothesIDs"):WaitForChild("ShirtNum").Value
+	local sleevesID = player:WaitForChild("ClothesIDs"):WaitForChild("SleevesNum").Value
+	local pantsID = player:WaitForChild("ClothesIDs"):WaitForChild("PantsNum").Value
+	local shoesID = player:WaitForChild("ClothesIDs"):WaitForChild("ShoesNum").Value
+	local eyesID = player:WaitForChild("ClothesIDs"):WaitForChild("EyesNum").Value
+	local noseID = player:WaitForChild("ClothesIDs"):WaitForChild("NoseNum").Value
+	local mouthID = player:WaitForChild("ClothesIDs"):WaitForChild("MouthNum").Value
+	
+	local outfitFolderHair = hairArray[hairID]
+	local outfitFolderTop =	shirtArray[shirtID]
+	local outfitFolderMid = sleevesArray[sleevesID]
+	local outfitFolderBottom = pantsArray[pantsID]
+	local outfitFolderShoes = shoesArray[shoesID]
+	--[[
+	print("Shirt: "..tostring(shirtID))
+	print("Sleeves: "..tostring(sleevesID))
+	print("Pants: "..tostring(pantsID))
+]]
+	local eyeTexture = eyesArray[eyesID]:Clone() or eyesArray[1]:Clone()
+	eyeTexture.Parent = player.Character.Head 
+	local noseTexture = nosesArray[noseID]:Clone() or nosesArray[1]:Clone()
+	noseTexture.Parent = player.Character.Head
+	local mouthTexture = mouthsArray[mouthID]:Clone() or mouthsArray[1]:Clone()
+	mouthTexture.Parent = player.Character.Head
+	
+	for _, bodyPart in pairs(player.Character:GetChildren()) do
+		local clothingMesh
+		if (bodyPart.Name == "Torso") then
+			clothingMesh = outfitFolderTop:FindFirstChild(bodyPart.Name)
+		
+		elseif (bodyPart.Name == "Left Leg" or bodyPart.Name == "Right Leg") then
+			clothingMesh = outfitFolderBottom:FindFirstChild(bodyPart.Name)
+		
+		elseif (bodyPart.Name == "Left Arm" or bodyPart.Name == "Right Arm") then
+			clothingMesh = outfitFolderMid:FindFirstChild(bodyPart.Name)
+		elseif (bodyPart.Name == "Head") then
+			clothingMesh = outfitFolderHair:FindFirstChild(bodyPart.Name)
+		end
+		
+		if clothingMesh then
+			local part = clothingMesh:Clone()
+			part.Anchored = false
+			part.CanCollide = false
+			part.Parent = player.Character.Clothes
+			part:PivotTo(bodyPart.CFrame * CFrame.Angles(0, math.rad(180), 0))
+			part.WeldConstraint.Part0 = bodyPart
+		end
+		
+	end
+	local leftShoesMesh
+	leftShoesMesh = outfitFolderShoes:FindFirstChild("Left Shoe")
+	if leftShoesMesh then
+		local part = leftShoesMesh:Clone()
+		part.Anchored = false
+		part.CanCollide = false
+		part.Parent = player.Character.Clothes
+		part:PivotTo(player.Character["Left Leg"].CFrame * CFrame.Angles(0, math.rad(180), 0))
+		part.WeldConstraint.Part0 = player.Character["Left Leg"]
+	end
+	local rightShoesMesh
+	rightShoesMesh = outfitFolderShoes:FindFirstChild("Right Shoe")
+	if rightShoesMesh then
+		local part = rightShoesMesh:Clone()
+		part.Anchored = false
+		part.CanCollide = false
+		part.Parent = player.Character.Clothes
+		part:PivotTo(player.Character["Right Leg"].CFrame * CFrame.Angles(0, math.rad(180), 0))
+		part.WeldConstraint.Part0 = player.Character["Right Leg"]
+	end
+	
+end
+
+rs.StatRemoteEvents.ClothesUpdateEvent.OnServerEvent:Connect(function(player, category, value)
+	player.ClothesIDs[category.."Num"].Value = player.ClothesIDs[category.."Num"].Value + value
+	updateClothes(player)
+end)
+
+rs.StatRemoteEvents.UpdateInventory.OnServerEvent:Connect(function(player, item, qty)
+	inventoryModule.UpdateInventory(player, item, qty)
+end)
+
+rs.StatRemoteEvents.HotbarUpdateEvent.OnServerEvent:Connect(function(player, itemName, value, action)
+	if action == "Add" then
+		local item = player.Hotbar:FindFirstChild(itemName)
+		if not item then 
+			item = Instance.new("IntValue")
+			item.Name = itemName
+			item.Value = value
+			item.Parent = player.Hotbar
+		end
+	else
+		local item = player.Hotbar:FindFirstChild(itemName)
+		if item then
+			item:Destroy()
+		end
+	end
+end)
