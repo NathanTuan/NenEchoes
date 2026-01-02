@@ -1,0 +1,249 @@
+local uis = game:GetService("UserInputService")
+local player = game:GetService("Players").LocalPlayer
+-- A variable to represent M1 state
+local m1Active = false
+local character = player.Character or player.CharacterAdded:Wait()
+local animator = character:WaitForChild("Humanoid"):WaitForChild("Animator")
+local humanoid = character:WaitForChild("Humanoid")
+local m1IdleFunction = game.ReplicatedStorage.BindableFunctions.M1Function
+local db = false
+local wCount = 0
+local walkSpeed = 16
+local curW = false
+local curA = false
+local curS = false
+local curD = false
+local blockCD = false
+chargedb = false
+holdingSpace = false
+
+local rs = game:GetService("ReplicatedStorage")
+local netD = ""
+
+local moveEvent = rs.RemoteEvents.MovementEvents.MoveEndEvent
+local sprintEvent = rs.RemoteEvents.MovementEvents.sprintEvent
+local blockEvent = rs.RemoteEvents.CombatEvents.BlockEvent
+local landEvent = rs.RemoteEvents.MovementEvents.LandEvent
+local jumpEvent = rs.RemoteEvents.MovementEvents.JumpEvent
+
+local charging = false
+local lastSpacePress = 0
+local sprinting = false
+local lastWPress = 0
+local doubleTapTime = 0.7
+local boatFlying = false
+--[[
+coroutine.resume(coroutine.create(function()
+	while true do
+		task.wait()
+		
+		if player.Character:GetAttribute("Stunned") == true then
+			
+			character.Humanoid.WalkSpeed = 0
+			character.Humanoid.JumpHeight = 0
+		else
+
+			character.Humanoid.WalkSpeed = character:GetAttribute("Speed")
+			character.Humanoid.JumpHeight = 7.2
+		end
+	end
+end))
+]]
+
+
+
+local function check()
+	if curW == true and curA ~= true and curD ~= true and curS ~= true then
+		netD = "w"
+	elseif curA == true and curD~= true then
+		netD = "a"
+	elseif curD == true and curA ~= true then
+		netD = "d"
+	elseif curS == true and curW ~= true and curA~= true and curD ~= true then
+		netD = "s"
+	elseif  curW == true and curA == true and curD == true and curS ~= true then
+		netD = "w"
+	
+	else
+		netD = ""
+	end
+end
+
+uis.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	
+	
+	if input.KeyCode == Enum.KeyCode.W then
+		
+		curW = true
+		
+		local currentTime = tick() 
+		if currentTime - lastWPress <= doubleTapTime then
+			
+		
+			sprintEvent:FireServer(true)
+		else
+			lastWPress = currentTime 
+		end
+		check()
+		moveEvent:FireServer(netD)
+	end
+	
+	if input.KeyCode == Enum.KeyCode.A then
+		
+		curA = true
+		check()
+		moveEvent:FireServer(netD)
+	end
+	
+	if input.KeyCode == Enum.KeyCode.D then
+		
+		curD = true
+		check()
+		moveEvent:FireServer(netD)
+	end
+	
+	if input.KeyCode == Enum.KeyCode.S  then
+		curS = true
+		check()
+		moveEvent:FireServer(netD)
+	end
+	
+	if input.KeyCode == Enum.KeyCode.F then
+		--print("block bru")
+		if blockCD == false then
+			blockEvent:FireServer()
+			blockCD = true
+			task.spawn(function()
+				task.wait(2)
+				blockCD = false
+			end)
+		end
+		
+	end
+	
+	if input.KeyCode == Enum.KeyCode.R then
+		if charging == false and chargedb == false then
+			rs.RemoteEvents.NenAbilities.StartChargeNenEvent:FireServer()
+			chargedb = true
+			task.spawn(function()
+				task.wait(0.5)
+				chargedb = false
+			end)
+		end
+		charging = true
+		while charging do
+			task.wait(0.1)
+			rs.RemoteEvents.NenAbilities.ChargeNenEvent:FireServer(true)
+			
+		end
+			
+	end
+	
+	if input.KeyCode == Enum.KeyCode.Space then
+		holdingSpace = true
+		task.spawn(function()
+			while holdingSpace do
+				task.wait(0.1)
+				if player.Character:GetAttribute("Attacking") == true then
+					rs.RemoteEvents.CombatEvents.AirtiltEvent:FireServer()
+				end
+			end
+		end)
+		local currentTime = tick()
+		if currentTime - lastSpacePress <= doubleTapTime then
+			if player.Character:GetAttribute("Attacking") == true then
+				print("Air tilt")
+				
+				rs.RemoteEvents.CombatEvents.AirtiltEvent:FireServer()
+			else
+				rs.RemoteEvents.MovementEvents.ClimbEvent:FireServer()
+			end
+			
+		else
+			lastSpacePress = currentTime 
+		end
+	end
+	
+	if input.KeyCode == Enum.KeyCode.E and player.Character:GetAttribute("Driving") == true then
+		rs.RemoteEvents.MovementEvents.BoatFlyEvent:FireServer("Up")
+	end
+end)
+
+uis.InputEnded:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	
+	if input.KeyCode == Enum.KeyCode.W  then
+	
+		curW = false
+		check()
+		if character:GetAttribute("Sprinting") == true then
+			sprintEvent:FireServer(false)
+		end
+	
+		moveEvent:FireServer(netD)
+		
+		
+	end
+	
+	if input.KeyCode == Enum.KeyCode.A then
+		curA = false
+		check()
+		moveEvent:FireServer(netD)
+	end
+	
+	if input.KeyCode == Enum.KeyCode.D  then
+		curD = false
+		check()
+		moveEvent:FireServer(netD)
+	end
+	
+	if input.KeyCode == Enum.KeyCode.S  then
+		curS = false
+		check()
+		moveEvent:FireServer(netD)
+	end
+	
+	if input.KeyCode == Enum.KeyCode.F then
+		--print("unblock???")
+		rs.RemoteEvents.CombatEvents.UnblockEvent:FireServer()
+	end
+	
+	
+	if input.KeyCode == Enum.KeyCode.R then
+		charging = false
+		rs.RemoteEvents.NenAbilities.ChargeNenEvent:FireServer(false)
+	end
+	
+	if input.KeyCode == Enum.KeyCode.Space then
+		holdingSpace = false
+	end
+	
+	if input.KeyCode == Enum.KeyCode.E and player.Character:GetAttribute("Driving") == true then
+		rs.RemoteEvents.MovementEvents.BoatFlyEvent:FireServer(player, "")
+	end
+end)
+
+local airborne = 0
+humanoid.StateChanged:Connect(function(_, newState)
+	if newState == Enum.HumanoidStateType.Freefall then
+		airborne = player.Character.HumanoidRootPart.Position.Y
+		jumpEvent:FireServer()
+	elseif newState == Enum.HumanoidStateType.Landed then
+		local newPos = player.Character.HumanoidRootPart.Position.Y
+	
+		if (airborne-newPos) > 10 and player.Character:GetAttribute("Stunned") == false then
+			--landEvent:FireServer()
+		end
+		check()
+		moveEvent:FireServer(netD)
+	end
+end)
+
+
+moveEvent.OnClientEvent:Connect(function()
+	moveEvent:FireServer(netD)
+end)
+
+
+
