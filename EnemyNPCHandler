@@ -1,0 +1,315 @@
+local CollectionService = game:GetService("CollectionService")
+local rs = game:GetService("ReplicatedStorage")
+local ss = game:GetService("ServerStorage")
+local pathfindingService = game:GetService("PathfindingService")
+local modScript = require(game.ServerScriptService.ModuleScript)
+local ragdollModule = require(game.ServerScriptService.ragdollModule)
+local enemyNPCModule = require(script.Parent.EnemyNPCModule)
+local hitPlayers = {}
+local enemyNPCSHitContribution = {}
+local enemyNPCAnims = {}
+local initializedDummies = {}
+local enemyAnims = require(game.ServerScriptService.enemyNPCAnims)
+local questInfo = require(rs.QuestText)
+
+--Datastore module stuff
+local inventoryModule = require(ss.DataStoreModules.InventoryModule)
+
+rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors.OnServerEvent:Connect(function(player, enemyNPC, damage)
+	local lastAttackerTag = enemyNPC.LastAttacker
+	lastAttackerTag.Value = player
+end)
+
+
+
+
+
+
+task.wait(1)
+local function quadraticBezier(p0, p1, p2, t)
+	return (1 - t)^2 * p0 + 2 * (1 - t) * t * p1 + t^2 * p2
+end
+local function curveToPlayer(orb, player)
+	local char = player.Character
+	if not char or not orb then return end
+
+	local hrp = char.PrimaryPart
+	if not hrp then return end
+
+	local p0 = orb.Position
+	local p2 = hrp.Position + Vector3.new(0, 2, 0)
+
+	-- Middle control point lifted upward to make the curve
+	local p1 = (p0 + p2) / 2 + Vector3.new(0, 10, 0)
+
+	local travelTime = 0.5
+	local steps = 30
+	local dt = travelTime / steps
+
+	for i = 1, steps do
+		local t = i / steps
+		local pos = quadraticBezier(p0, p1, p2, t)
+
+		if orb:IsA("Model") and orb.PrimaryPart then
+			orb:PivotTo(CFrame.new(pos))
+		elseif orb:IsA("BasePart") then
+			orb.Position = pos
+		end
+			
+		task.wait(dt)
+	end
+
+	orb:Destroy()
+end
+
+local spawnXPOrb = function(dummyPos, dummyVector, player)
+	for i=1, 4, 1 do
+		--print("SpawningOrb")
+		local orb = rs.VFX.gameProgVFX.XPOrb:Clone()
+		local randomOffset = Vector3.new(math.random(-1, 1), math.random(-1, 1), 0) 
+		local dummyLook = CFrame.new(dummyPos, dummyPos+dummyVector)
+		local worldOffset = dummyLook:VectorToWorldSpace(randomOffset)
+		orb.Position = dummyPos + worldOffset
+		orb.Parent = game.Workspace
+		task.spawn(function()
+			curveToPlayer(orb, player)
+		end)
+		
+	end
+
+	
+end
+
+
+local RunService = game:GetService("RunService")
+local MaxDistance = 60
+local PathfindingService = game:GetService("PathfindingService")
+local wayPointPos = nil
+
+local path = PathfindingService:CreatePath({
+	AgentRadius = 2,
+	AgentHeight = 1,
+	AgentCanJump = true,
+	AgentJumpHeight = 7.2,
+	AgentMaxSlope = 45,
+})
+
+local function initDummy(dummy)
+	
+	if not CollectionService:HasTag(dummy, "EnemyNPC") then return end
+	
+	local humanoid = dummy:FindFirstChild("Humanoid")
+	local hrp = dummy.PrimaryPart
+	if not humanoid or initializedDummies[dummy] then return end
+	
+	
+	initializedDummies[dummy] = true
+	dummy:SetAttribute("Health", 100)
+	dummy:SetAttribute("Died", false)
+	dummy:SetAttribute("RagdollTime", 0)
+	dummy:SetAttribute("Attacking", false)
+	dummy:SetAttribute("Blocking", false)
+	dummy:SetAttribute("Coins", 15)
+	dummy:SetAttribute("Combo", 1)
+	dummy:SetAttribute("Cooldown", false)
+	dummy:SetAttribute("Speed", 20)
+	dummy:SetAttribute("Stunned", false)
+	dummy:SetAttribute("XP", 100)
+	
+
+	if not enemyNPCSHitContribution[dummy] then
+		enemyNPCSHitContribution[dummy] = {}
+	end
+
+	if not enemyNPCAnims[dummy] then
+		enemyNPCAnims[dummy] = enemyAnims:GetAnimations(dummy)
+	end
+
+	--Health stuff
+	local prevHealth = humanoid.MaxHealth
+	local heathConn 
+	heathConn = humanoid.HealthChanged:Connect(function(newHealth)
+		local damage = math.floor((prevHealth-newHealth)*10+0.5)/10
+		prevHealth = newHealth
+		
+		local attacker = dummy.LastAttacker.Value
+		if attacker then
+			if enemyNPCSHitContribution[dummy] then
+				if not enemyNPCSHitContribution[dummy][attacker] then
+					enemyNPCSHitContribution[dummy][attacker] = 0
+				end
+				enemyNPCSHitContribution[dummy][attacker] = enemyNPCSHitContribution[dummy][attacker] + damage
+			end
+		else
+			task.delay(0.5, function()
+
+				local attacker = dummy.LastAttacker.Value
+				if attacker then
+					if enemyNPCSHitContribution[dummy] then
+						if not enemyNPCSHitContribution[dummy][attacker] then
+							enemyNPCSHitContribution[dummy][attacker] = 0
+						end
+						enemyNPCSHitContribution[dummy][attacker] = enemyNPCSHitContribution[dummy][attacker] + damage
+					end
+				end
+			end)
+		end
+	end)
+	
+	-- Death stuff
+	local deathConn
+	deathConn = humanoid.Died:Connect(function()
+		modScript.unstun(dummy)
+		ragdollModule:Unragdoll(dummy)
+		local hrpPos = hrp.Position
+		local lookVector = hrp.CFrame.LookVector
+		local name = dummy.Name
+		
+		deathConn:Disconnect()
+		deathConn = nil
+		heathConn:Disconnect()
+		heathConn = nil
+		prevHealth = nil
+		
+		dummy.Torso.Anchored = true
+		
+		for _, v in pairs(dummy:GetChildren()) do
+			if v:IsA("BasePart") then
+				v.Transparency = 0
+			end
+		end
+		
+		if not dummy:GetAttribute("Died") then
+			dummy:SetAttribute("Died", true)
+			local islandID = string.sub(dummy.Parent.Parent.Name, -1)
+			local batchID = string.sub(dummy.Parent.Name, -1)
+			if enemyNPCSHitContribution[dummy] then
+				for player, damage in pairs(enemyNPCSHitContribution[dummy]) do
+					if game.Workspace:FindFirstChild(player.Name) then
+						spawnXPOrb(hrpPos, lookVector, player)
+						rs.StatRemoteEvents.XP:FireClient(player, dummy:GetAttribute("XP"))
+						inventoryModule.UpdateInventory(player, "Gold", dummy:GetAttribute("Gold"))
+						local quest = player.Quests:FindFirstChild("Island"..islandID)
+						if quest then
+							local batch = quest:FindFirstChild("Batch"..batchID)
+							if batch then
+								local progress = batch:FindFirstChild("Progress")
+								if progress then
+									progress.Value = progress.Value + 1
+									--print("Should increment progress")
+								end
+							end
+						end
+					end
+					
+					
+				end
+				
+			end
+			task.delay(7, function()
+				local clone = ss.EnemyNPCS["Island"..tostring(islandID)]["Batch"..tostring(batchID)].EnemyNPC:Clone()
+				clone.Name = name
+				local spawnPos = game.Workspace.EnemyNPCS.Island1.Batch1["EnemySpawn"..string.sub(name, -1).."Pos"]
+				if spawnPos then
+					clone.PrimaryPart.CFrame = spawnPos.CFrame
+					clone.Parent = game.Workspace.EnemyNPCS["Island"..tostring(islandID)]["Batch"..tostring(batchID)]
+				end
+			end)
+			enemyNPCAnims[dummy] = nil
+			enemyNPCSHitContribution[dummy] = nil
+			initializedDummies[dummy] = nil
+			
+
+			game:GetService("Debris"):AddItem(dummy, 0.1)
+		end
+	end)
+
+	-- Movement logic
+	task.spawn(function()
+		while dummy and dummy.Parent and humanoid.Health > 0 do
+			local closest = nil
+			local minDistance = MaxDistance
+
+			for player, _ in pairs(enemyNPCSHitContribution[dummy]) do
+				local char = player.Character
+				if char and char.PrimaryPart and char:FindFirstChild("Humanoid") and char.Humanoid.Health > 0 then
+					local dist = (hrp.Position - char.PrimaryPart.Position).Magnitude
+					if dist < minDistance then
+						minDistance = dist
+						closest = char.PrimaryPart
+					end
+				end
+			end
+			
+			
+			if closest then
+				path:ComputeAsync(hrp.Position, closest.Position)
+				local waypoints = path:GetWaypoints()
+				local lastFailTime = 0
+				local dir = (hrp.Position - closest.Position)
+				if dir.Magnitude > 4 then
+					for _, waypoint in waypoints do
+						--[[
+						local part = Instance.new("Part")
+						part.Anchored = true
+						part.Position = waypoint.Position
+						part.Color = Color3.new(1, 0, 0)
+						part.Material = Enum.Material.Neon
+						part.CanCollide = false
+						part.Parent = game.Workspace
+						game.Debris:AddItem(part, 0.5)
+						]]
+						local dir = (hrp.Position - closest.Position)
+						
+						if dir.Magnitude > 5 then
+							if waypoint.Action == Enum.PathWaypointAction.Jump then
+								humanoid.Jump = true
+							end
+							humanoid:MoveTo(waypoint.Position)
+							local choice = math.random(0, 3)
+							if choice == 3 then
+								enemyNPCModule.roll(dummy, "Forward", enemyNPCAnims)
+							end
+						else
+							hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + dir.Unit*5)*CFrame.Angles(0, math.rad(180), 0)
+							task.wait()
+							enemyNPCModule.punch(dummy, enemyNPCAnims, hitPlayers)
+						end
+						--local reached = humanoid.MoveToFinished:Wait()
+						
+					end
+				else
+					hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + dir.Unit*5)*CFrame.Angles(0, math.rad(180), 0)
+					task.wait()
+					enemyNPCModule.punch(dummy, enemyNPCAnims, hitPlayers)
+					
+				end
+				
+			else
+				task.wait(1)
+			end
+
+			task.wait(0.1)
+		end
+	end)
+end
+
+-- Init existing NPCs
+for _, folders in ipairs(workspace.EnemyNPCS:GetChildren()) do
+	for _, folder in ipairs(folders:GetChildren()) do
+		for _, dummy in ipairs(folder:GetChildren()) do
+			
+			initDummy(dummy)
+		end
+	end
+	
+end
+
+-- Init newly spawned NPCs
+workspace.EnemyNPCS.DescendantAdded:Connect(function(dummy)
+	task.defer(function()
+		initDummy(dummy)
+		--print("init dummy")
+	end)
+end)
+
