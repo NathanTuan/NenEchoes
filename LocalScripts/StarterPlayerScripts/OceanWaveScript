@@ -1,0 +1,150 @@
+
+local ocean = game.Workspace:WaitForChild("ocean")
+--local plane = ocean:WaitForChild("TestPlane")
+
+local bones = {}
+
+for _, plane in pairs(ocean:GetChildren()) do
+	if plane:IsA("MeshPart") then
+		local boneData = {}
+		for _, bone in pairs(plane:GetDescendants()) do
+			if bone:IsA("Bone") then
+				local pos = bone.WorldPosition
+				table.insert(boneData, {
+					bone = bone,
+					pos = pos,
+					canMove = nil,
+					speedOffset = math.random()*1.3,
+				})
+			end
+		end
+		bones[plane] = {origin = plane.Position, boneData = boneData}
+	end
+end
+
+local function visualizeRay(origin, direction)
+	local part0 = Instance.new("Part")
+	part0.Anchored = true
+	part0.CanCollide = false
+	part0.Transparency = 1
+	part0.Size = Vector3.new(0.1, 0.1, 0.1)
+	part0.Position = origin
+	part0.Parent = workspace
+
+	local part1 = Instance.new("Part")
+	part1.Anchored = true
+	part1.CanCollide = false
+	part1.Transparency = 1
+	part1.Size = Vector3.new(0.1, 0.1, 0.1)
+	part1.Position = origin + direction
+	part1.Parent = workspace
+
+	local att0 = Instance.new("Attachment", part0)
+	local att1 = Instance.new("Attachment", part1)
+
+	local beam = Instance.new("Beam")
+	beam.Attachment0 = att0
+	beam.Attachment1 = att1
+	beam.FaceCamera = true
+	beam.Width0 = 0.15
+	beam.Width1 = 0.15
+	beam.Color = ColorSequence.new(Color3.fromRGB(255, 0, 0))
+	beam.LightEmission = 1
+	beam.Parent = part0
+
+	--[[task.delay(0.1, function()
+		part0:Destroy()
+		part1:Destroy()
+	end)
+	]]
+end
+
+ocean.DescendantAdded:Connect(function(desc)
+	
+	if desc:IsA("Bone") then
+		local pos = desc.WorldPosition
+		local plane = desc.Parent
+		if bones[plane] then
+			table.insert(bones[plane].boneData, {
+				bone = desc,
+				pos = pos,
+				canMove = nil,
+				speedOffset = math.random()*1.3,
+			})
+		end
+	elseif desc:IsA("MeshPart") then
+		local plane = desc
+		bones[plane] = {origin = plane.Position, boneData = {}}
+	end
+end)
+
+
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local root = character:WaitForChild("HumanoidRootPart")
+local RunService = game:GetService("RunService")
+
+local maxDistancePlane = 200
+local maxDistanceBone = 80
+local freq = 10
+local speed = 1.3
+local amplitude = 4.5
+local t = 0
+
+
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Exclude
+rayParams.FilterDescendantsInstances = {ocean, game.Workspace:WaitForChild("Baseplate"), game.Workspace:WaitForChild("Sand")}
+
+RunService.RenderStepped:Connect(function(dt)
+	t += dt
+	local playerPos = root.Position
+
+	for plane, data in pairs(bones) do
+		for i, boneData in pairs(data.boneData) do
+			if i%2 == 0 then
+				local canMove = boneData.canMove
+				if canMove ~= nil then
+					if canMove == true then
+						--print("Can move bone"..)
+						local x = boneData.pos.X
+						local z = boneData.pos.Z
+						local phaseOffset = (boneData.pos.X + boneData.pos.Z) * 0.1
+						local speedOffset = boneData.speedOffset or 0
+						local y = math.sin(t * (speed+speedOffset) + x * freq + z * freq + phaseOffset) * amplitude
+						boneData.bone.Transform = CFrame.new(0, y, 0)
+					end
+				else
+					local result = game.Workspace:Raycast(boneData.pos+Vector3.new(0, -50, 0), Vector3.new(0, 75, 0), rayParams)
+					if result and result.Instance then
+				
+						--visualizeRay(boneData.pos + Vector3.new(0, 50, 0), Vector3.new(0, -75, 0))
+						boneData.canMove = false
+						boneData.bone.Transform = CFrame.new(0, 0, 0)
+						
+					else
+						boneData.canMove = true
+
+					end
+				end
+				
+			end
+			
+		end
+	end
+end)
+
+
+--[[
+local boneDist = (boneData.pos - playerPos).Magnitude
+--print("BoneDist"..tostring(boneDist))
+if boneDist <= maxDistanceBone then
+	local x = boneData.pos.X
+	local z = boneData.pos.Z
+	local y = math.sin(t * speed + x * freq + z * freq) * amplitude
+	boneData.bone.Transform = CFrame.new(0, y, 0)
+else
+	boneData.bone.Transform = CFrame.new(0, 0, 0)
+end
+
+]]
