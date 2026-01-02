@@ -1,0 +1,168 @@
+local Module = {}
+Module.__index = Module
+
+local storage = {}
+
+
+local movementAnimsModule = require(game.ServerScriptService.GeneralPlayerScripts.Movement.movementAnimsModule)
+local nenAnimsModule = require(game.ServerScriptService.NenAbilities.NenAbilityAnimationManager)
+
+local function isMotor6D(child)
+	return child:IsA("Motor6D")
+end
+
+local function createAttachmentOn(part, name, cframe)
+	local att = Instance.new("Attachment")
+	att.Name = name .. "_Ragdoll_Att"
+	att.CFrame = cframe or CFrame.new()
+	att.Parent = part
+	return att
+end
+
+local function motorCFrameRelative(motor)
+	return motor.C0, motor.C1
+end
+
+local function convertMotorToConstraint(motor)
+	local parent = motor.Part0
+	local child = motor.Part1
+	if not parent or not child then return nil end
+	local c0, c1 = motorCFrameRelative(motor)
+	local a0 = createAttachmentOn(parent, motor.Name .. "_A0", c0)
+	local a1 = createAttachmentOn(child, motor.Name .. "_A1", c1)
+	local constraint
+	
+	if motor.Name == "Right Shoulder" or motor.Name == "Left Shoulder" or motor.Name == "Right Hip" or motor.Name == "Left Hip" then
+		constraint = Instance.new("HingeConstraint")
+		constraint.LimitsEnabled = true
+		constraint.UpperAngle = 45
+		constraint.LowerAngle = -45
+		constraint.Attachment0 = a0
+		constraint.Attachment1 = a1
+		constraint.Name = motor.Name .. "_Ragdoll_Hinge"
+		constraint.Parent = parent
+	else
+		constraint = Instance.new("BallSocketConstraint")
+		constraint.Name = motor.Name .. "_Ragdoll_BSC"
+		constraint.Attachment0 = a0
+		constraint.Attachment1 = a1
+		constraint.Parent = parent
+	end
+	
+	return {constraint = constraint, attachments = {a0, a1}}
+end
+
+local function saveAndRemoveMotor(character, motor)
+	local saved = {
+		Name = motor.Name,
+		Part0 = motor.Part0,
+		Part1 = motor.Part1,
+		C0 = motor.C0,
+		C1 = motor.C1,
+		Transform = motor.Transform,
+		Instance = motor
+	}
+	storage[character] = storage[character] or {motors = {}, created = {}}
+	table.insert(storage[character].motors, saved)
+	motor:Destroy()
+end
+
+local function restoreMotors(character)
+	if not storage[character] then return end
+	for _, v in ipairs(storage[character].created) do
+		if v.constraint and v.constraint.Parent then v.constraint:Destroy() end
+		if v.attachments then
+			for _, a in ipairs(v.attachments) do
+				if a and a.Parent then a:Destroy() end
+			end
+		end
+	end
+	for _, s in ipairs(storage[character].motors) do
+		if s.Part0 and s.Part1 then
+			local m = Instance.new("Motor6D")
+			m.Name = s.Name
+			m.Part0 = s.Part0
+			m.Part1 = s.Part1
+			m.C0 = s.C0
+			m.C1 = s.C1
+			m.Transform = s.Transform
+			m.Parent = s.Part0
+		end
+	end
+	storage[character] = nil
+end
+
+local collectionService = game:GetService("CollectionService")
+
+function Module:Ragdoll(character, duration)
+	if not character or not character.Parent or collectionService:HasTag(character, "enemyBoss") then return end
+	character:SetAttribute("Ragdolled", true)
+
+	if duration < (character:GetAttribute("RagdollTime") or 0) then
+		return
+	end
+
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if storage[character] then return end
+	storage[character] = {motors = {}, created = {}}
+	if humanoid then
+		local animator = humanoid:FindFirstChildOfClass("Animator")
+		--if animator then animator:Destroy() end
+		humanoid.PlatformStand = true
+	end
+	local root = character.PrimaryPart or character:FindFirstChild("Torso")
+	if root then
+		root.Velocity = Vector3.new()
+		root.RotVelocity = Vector3.new()
+	end
+	for _, part in ipairs(character:GetDescendants()) do
+		if isMotor6D(part) and part.Part0 and part.Part1 and part.Part0:IsDescendantOf(character) and part.Part1:IsDescendantOf(character) then
+			saveAndRemoveMotor(character, part)
+		end
+	end
+	for _, s in ipairs(storage[character].motors) do
+		if s.Part0 and s.Part1 then
+			local dummyMotor = Instance.new("Motor6D")
+			dummyMotor.Name = s.Name
+			dummyMotor.Part0 = s.Part0
+			dummyMotor.Part1 = s.Part1
+			dummyMotor.C0 = s.C0
+			dummyMotor.C1 = s.C1
+			local created = convertMotorToConstraint(dummyMotor)
+			if created then
+				table.insert(storage[character].created, created)
+			end
+			dummyMotor:Destroy()
+		end
+	end
+
+	character:SetAttribute("RagdollTime", duration)
+	if not workspace.RagdolledPlayers:FindFirstChild(character.Name.."Ragdoll") then
+		local tag = Instance.new("ObjectValue")
+		tag.Name = character.Name.."Ragdoll"
+		tag.Value = character
+		tag.Parent = workspace.RagdolledPlayers
+	end
+end
+
+function Module:Unragdoll(character)
+	if not character or not character.Parent then return end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if humanoid then
+		humanoid.PlatformStand = false
+		if not humanoid:FindFirstChildOfClass("Animator") then
+			--local a = Instance.new("Animator")
+			--a.Parent = humanoid
+		end
+		humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+	end
+	restoreMotors(character)
+	
+	
+	
+	--movementAnimsModule:ClearCache(character)
+	--nenAnimsModule:ClearCache(character) 
+	
+end
+
+return Module
