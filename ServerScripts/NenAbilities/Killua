@@ -1,0 +1,535 @@
+local rs = game:GetService("ReplicatedStorage")
+local modScript = require(game.ServerScriptService.ModuleScript)
+local animScript = require(script.Parent.NenAbilityAnimationManager)
+local ragdollModule = require(game.ServerScriptService.ragdollModule)
+local cdManager = require(rs.CooldownManager)
+local cdScript = require(rs.Cooldowns)
+
+local Z = rs.RemoteEvents.NenAbilities.KilluaMoves.Z
+local X = rs.RemoteEvents.NenAbilities.KilluaMoves.X
+local C = rs.RemoteEvents.NenAbilities.KilluaMoves.C
+local UICDEvent = rs.RemoteEvents.UIEvents.UICDEvent
+
+local segments = 10
+local radius = 10
+local yOffset = 0.1
+local tweenService = game:GetService("TweenService")
+
+local spawnFlyParts = function(hit)
+	local debris = game:GetService("Debris")
+	local radius = 8
+	local segments = 20
+	local center = hit.Parent.PrimaryPart.Position
+
+	for i = 1, segments do
+		local angle = (2 * math.pi / segments) * i
+		local x = math.cos(angle) * radius
+		local z = math.sin(angle) * radius
+		local pos = center + Vector3.new(x, -3, z)
+		local newSize = math.random(0.2, 2.6)
+		local part = Instance.new("Part")
+		part.Size = Vector3.new(newSize, newSize, newSize)
+		part.Position = pos
+		part.CFrame = CFrame.lookAt(pos, center)
+		part.Anchored = false
+		part.CanCollide = true
+		part.Material = Enum.Material.Basalt
+		part.Color = Color3.fromRGB(60, 60, 60)
+	
+		part.AssemblyAngularVelocity = Vector3.new(math.random(), math.random(), math.random()) * 10 -- spin
+		local outwardDir = (pos - center).Unit
+		local upwardDir = Vector3.new(0, 1, 0)
+		local burstDir = (outwardDir + upwardDir).Unit
+
+
+		part.AssemblyLinearVelocity = burstDir * math.random(25, 35)
+		part.Parent = workspace
+
+		debris:AddItem(part, 3)
+	end
+end
+
+local spawnCircleParts = function(hit)
+	local tInfo = TweenInfo.new(0.2, Enum.EasingStyle.Linear, Enum.EasingDirection.In)
+	for i = 1, segments do
+		local angle = (2 * math.pi / segments) * i
+		local x = math.cos(angle) * radius
+		local z = math.sin(angle) * radius
+		local yRot = math.random(20, 45)
+		local pos = hit.Parent.PrimaryPart.Position + Vector3.new(x, -3, z)
+
+
+
+		local part = Instance.new("Part")
+		part.Size = Vector3.new(math.random(2, 5), math.random(1, 2), math.random(1, 3))
+		part.CFrame = CFrame.lookAt(hit.Parent.PrimaryPart.Position + Vector3.new(0, -2, 0), pos)
+		part.CFrame *= CFrame.Angles(math.rad(math.random(0, 45)), 0, 0)
+		part.Position = pos
+		part.Anchored = true
+		part.CanCollide = false
+		part.Material = Enum.Material.Basalt
+		part.Color = Color3.fromRGB(60, 60, 60)
+		part.Parent = workspace
+		game:GetService("Debris"):AddItem(part, 4)
+		local tween = tweenService:Create(part, tInfo, {Position = part.Position + Vector3.new(0, 1, 0)}):Play()
+		task.spawn(function()
+			task.wait(4)
+			local tween2 = tweenService:Create(part, tInfo, {Position = part.Position + Vector3.new(0, -3, 0)}):Play()
+		end)
+
+
+	end
+end
+
+local function handCrackle(player, timeDur)
+	local leftVFX = rs.VFX.KilluaVFX.HandCrackle:Clone()
+	leftVFX.Position = player.Character["Left Arm"].Position
+	leftVFX.Parent = player.Character["Left Arm"]
+	local lm6D = Instance.new("Motor6D")
+	lm6D.Parent = leftVFX
+	lm6D.Part0 = player.Character["Left Arm"]
+	lm6D.Part1 = leftVFX
+	lm6D.C1 = CFrame.new(0, 1, 0)
+
+	local rightVFX = rs.VFX.KilluaVFX.HandCrackle:Clone()
+	rightVFX.Position = player.Character["Right Arm"].Position
+	rightVFX.Parent = player.Character["Right Arm"]
+	local rm6D = Instance.new("Motor6D")
+	rm6D.Parent = rightVFX
+	rm6D.Part0 = player.Character["Right Arm"]
+	rm6D.Part1 = rightVFX
+	rm6D.C1 = CFrame.new(0, 1, 0)
+	game:GetService("Debris"):AddItem(rightVFX, timeDur)
+	game:GetService("Debris"):AddItem(leftVFX, timeDur)
+end
+
+Z.OnServerEvent:Connect(function(player, target)
+	local checks = modScript.checkAll(player)
+	if checks == false or player.Character:GetAttribute("Busy") == true then return end
+	if cdManager.IsOnCooldown(player, "Z") == true or player.Character:GetAttribute("Nen") < cdScript.Killua.Z.Cost then return end
+	player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")-cdScript.Killua.Z.Cost)
+	rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, cdScript.Killua.Z.Cost)
+	
+	player.Character:SetAttribute("Busy", true)
+	
+	local anims = animScript:GetAnimations(player.Character)
+	handCrackle(player, 1.5)
+	local hrp = player.Character.PrimaryPart
+	local direction = (target-hrp.Position).Unit*27
+	local vectorGoal = direction + hrp.Position
+	
+
+	
+	
+	local hitbox = rs.VFX.Hitboxes.KilluaHitboxes.thunderboltHitbox:Clone()
+	hitbox.CFrame = CFrame.lookAt(hrp.Position, vectorGoal) * CFrame.new(0, 0, -14)
+	hitbox.Parent = game.Workspace
+	hitbox.Name = "CMoveBox"
+	game:GetService("Debris"):AddItem(hitbox, 0.1)
+	
+	
+	local hitboxParams = OverlapParams.new()
+	hitboxParams.FilterType = Enum.RaycastFilterType.Exclude
+	hitboxParams.FilterDescendantsInstances = {player.Character, hitbox}
+	local hits = workspace:GetPartBoundsInBox(hitbox.CFrame, hitbox.Size, hitboxParams)
+	local hitPlayers = {}
+	
+	for _, hit in hits do
+
+		local hum = hit.Parent:FindFirstChild("Humanoid")
+		if hum and not hitPlayers[hit.Parent] then
+			hitPlayers[hit.Parent] = true
+			modScript.applyAttackingState(player.Character, 1.3)
+			anims.thunderboltClip:Play()
+		
+			
+			local bool = modScript.checkInterruption(player.Character, anims.thunderboltClip.Length+0.2)
+			if bool then
+				local damage = cdScript.Killua.Z.Damage
+				local blockingDamage = math.floor((damage/2)*10+0.5)/10
+
+				anims.thunderboltClip2:Play()
+				task.wait(0.3)
+				if hit.Parent:GetAttribute("Parrying") == true then
+					local parryFX = rs.VFX.CombatVFX.parryFX:Clone()
+					parryFX.Position = hit.Parent.PrimaryPart
+					parryFX.Parent = game.Workspace
+					task.wait(0.05)
+					game:GetService("Debris"):AddItem(parryFX, 1)
+					for _, v in pairs(parryFX:GetChildren()) do
+						if v:IsA("ParticleEmitter") then
+							v:Emit(v:GetAttribute("EmitCount"))
+						end
+					end
+				elseif hit.Parent:GetAttribute("Blocking") == true then
+					hum:TakeDamage(blockingDamage)
+					modScript.damageLooks(player, hit, blockingDamage)
+					rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, blockingDamage)
+					
+				else
+					hum:TakeDamage(damage)
+					modScript.damageLooks(player, hit, damage)
+					rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, damage)
+					modScript.stun(hit.Parent, 2)
+					ragdollModule:Ragdoll(hit.Parent, 2)
+				end
+				
+				
+			
+				
+				local currentCFrame = hrp.CFrame
+				local startPos = hit.Parent.PrimaryPart.Position + Vector3.new(0, 2, 0)
+				local endPos = startPos + Vector3.new(0, 28, 0) 
+				local rayParams = RaycastParams.new()
+				rayParams.FilterDescendantsInstances = {player.Character, hit.Parent}
+				rayParams.FilterType = Enum.RaycastFilterType.Exclude
+
+				local rayResult = workspace:Raycast(startPos, endPos - startPos, rayParams)
+
+				if not rayResult then
+					hrp.CFrame = CFrame.new(endPos)
+				else
+					print("blocked above target, skipping teleport")
+				end
+				
+				
+				
+				--
+				local thunderboltVFX = rs.VFX.KilluaVFX.Thunderbolt:Clone()
+				thunderboltVFX.Position = hit.Parent.PrimaryPart.Position
+				thunderboltVFX.Parent = game.Workspace
+				game:GetService("Debris"):AddItem(thunderboltVFX, 5)
+				task.wait(0.05)
+				for _, v in pairs(thunderboltVFX:GetChildren()) do
+					if v:IsA("Attachment") then
+						for _, j in pairs(v:GetChildren()) do
+							j:Emit(j:GetAttribute("EmitCount"))
+						end
+					end
+				end
+				
+				
+				--spawnCircleParts(hit)
+				spawnFlyParts(hit)
+				local debrisVFX = rs.VFX.CombatVFX.ExplosionDebris:Clone()
+				debrisVFX.Position = hit.Parent.PrimaryPart.Position+Vector3.new(0, -1, 0)
+				debrisVFX.Parent = game.Workspace
+				task.wait(0.03)
+				debrisVFX.Attachment.Dust:Emit(3)
+				
+				
+				local lv = Instance.new("LinearVelocity")
+				lv.RelativeTo = Enum.ActuatorRelativeTo.World
+				lv.MaxForce = 1e10
+				lv.VectorVelocity = Vector3.new(0, 0, 0)
+				lv.Attachment0 = player.Character.PrimaryPart:FindFirstChild("RootAttachment") or Instance.new("Attachment", player.Character.PrimaryPart)
+				lv.Parent = player.Character
+				
+				task.delay(0.4, function()
+					lv:Destroy()
+				end)
+				player.Character:SetAttribute("Busy", false)
+			
+				return
+			else
+				--print("Interrupted")
+			end
+		end
+	end
+	--print("Missed")
+	cdManager.SetCooldown(player, "Z", cdScript.Killua.Z.Cooldown)
+	UICDEvent:FireClient(player, "Z", cdScript.Killua.Z.Cooldown)
+	player.Character:SetAttribute("Busy", false)
+end)
+
+X.OnServerEvent:Connect(function(player, target)
+	local checks = modScript.checkAll(player)
+	if checks == false or player.Character:GetAttribute("Busy") == true then return end
+	if cdManager.IsOnCooldown(player, "X") == true or player.Character:GetAttribute("Nen") < cdScript.Killua.X.Cost then return end
+	player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")-cdScript.Killua.X.Cost)
+	rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, cdScript.Killua.X.Cost)
+	cdManager.SetCooldown(player, "X", cdScript.Killua.X.Cooldown)
+	UICDEvent:FireClient(player, "X", cdScript.Killua.X.Cooldown)
+
+	--local canContinue= true
+	local hrp = player.Character.PrimaryPart
+	local direction = (target-hrp.Position).Unit*27
+	local vectorGoal = direction + hrp.Position
+	
+	local anims = animScript:GetAnimations(player.Character)
+	
+	
+	anims.palmChargeClip:Play()
+	
+	
+	
+	--modScript.stun(player.Character, clip.Length)
+	
+	handCrackle(player, 1)
+	
+	modScript.applyAttackingState(player.Character, 1)
+	player.Character:SetAttribute("Cooldown", true)
+	task.delay(anims.palmChargeClip.Length + anims.palmRushClip.Length, function()
+		player.Character:SetAttribute("Cooldown", false)
+	end)
+	local bool = modScript.checkInterruption(player.Character, anims.palmChargeClip.Length)
+	if bool then
+		anims.palmRushClip:Play()
+		--modScript.knockback(player.Character, player.Character, 70)
+		local hrpLook = hrp.CFrame.LookVector
+		local dir = Vector3.new(hrpLook.X, 0, hrpLook.Z)
+		local speed = 280
+		hrp.AssemblyLinearVelocity = dir*speed
+
+		
+		local hitbox = rs.VFX.Hitboxes.KilluaHitboxes.realPalmHitbox:Clone()
+		hitbox.CFrame = CFrame.lookAt(hrp.Position, vectorGoal) * CFrame.new(0, 0, -5)
+		hitbox.Parent = game.Workspace
+		
+		local m6D = Instance.new("WeldConstraint")
+		m6D.Parent = hitbox
+		m6D.Part0 = player.Character.Head
+		m6D.Part1 = hitbox
+		
+		hrp.CFrame = CFrame.lookAt(hrp.Position, vectorGoal)
+
+		game:GetService("Debris"):AddItem(hitbox, 0.5)
+
+		local hitboxParams = OverlapParams.new()
+		hitboxParams.FilterType = Enum.RaycastFilterType.Exclude
+		hitboxParams.FilterDescendantsInstances = {player.Character, hitbox}
+		local hitPlayers = {}
+		for i=1, 10, 1 do
+			local hits = workspace:GetPartBoundsInBox(hitbox.CFrame, hitbox.Size, hitboxParams)
+			
+			
+			for _, hit in hits do
+				local hum = hit.Parent:FindFirstChild("Humanoid")
+				if hum and not hitPlayers[hum.Parent] then
+					hitPlayers[hum.Parent] = true
+					local damage = cdScript.Killua.X.Damage
+					local blockingDamage = math.floor((damage/2)*10+0.5)/10
+					
+					local palmVFX = rs.VFX.KilluaVFX.ThunderPalmHit:Clone()
+					palmVFX.Position = hit.Parent.PrimaryPart.Position + Vector3.new(0, 1, 0)
+					--palmVFX.Zone.Position = hit.Parent.PrimaryPart.Position
+					palmVFX.Parent = game.Workspace
+					game:GetService("Debris"):AddItem(palmVFX, 1.5)
+					task.spawn(function()
+						task.wait(0.05)
+						for _, v in pairs(palmVFX:GetChildren()) do
+							if v:IsA("Attachment") or v:IsA("Part") then
+								for _, j in pairs(v:GetChildren()) do
+									j:Emit(j:GetAttribute("EmitCount"))
+								end
+							end
+						end
+					end)
+					
+					
+					if hit.Parent:GetAttribute("Parrying") == true then
+						local parryFX = rs.VFX.CombatVFX.parryFX:Clone()
+						parryFX.Position = hit.Parent.PrimaryPart.Position
+						parryFX.Parent = game.Workspace
+						task.wait(0.05)
+						game:GetService("Debris"):AddItem(parryFX, 1)
+						for _, v in pairs(parryFX:GetChildren()) do
+							if v:IsA("ParticleEmitter") then
+								v:Emit(v:GetAttribute("EmitCount"))
+							end
+						end
+					elseif hit.Parent:GetAttribute("Blocking") == true then
+						hum:TakeDamage(blockingDamage)
+						modScript.damageLooks(player, hit, blockingDamage)
+						ragdollModule:Ragdoll(hit.Parent, 1.7)
+						modScript.knockback(player.Character, hit.Parent, 10)
+						modScript.stun(hit.Parent, 1.7)
+						modScript.blockbreak(hit.Parent)
+						rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, blockingDamage)
+
+					else
+						hum:TakeDamage(damage)
+						modScript.damageLooks(player, hit, damage)
+						ragdollModule:Ragdoll(hit.Parent, 1.7)
+						modScript.knockback(player.Character, hit.Parent, 30)
+						modScript.stun(hit.Parent, 1.7)
+						rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, damage)
+					end
+					
+					
+				end
+			end
+			task.wait(0.1)
+		end
+		
+	end
+end)
+
+C.OnServerEvent:Connect(function(player, target)
+	local checks = modScript.checkAll(player)
+	if checks == false and player.Character:GetAttribute("Busy") == true or player.Character:GetAttribute("GodSpeed") == true then return end
+	if cdManager.IsOnCooldown(player, "C") == true or player.Character:GetAttribute("Nen") < cdScript.Killua.C.Cost then return end
+	cdManager.SetCooldown(player, "C", cdScript.Killua.C.Cooldown)
+	player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")-cdScript.Killua.C.Cost)
+	rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, cdScript.Killua.C.Cost)
+	UICDEvent:FireClient(player, "C", cdScript.Killua.C.Cooldown)
+	local active = true
+	player.Character:SetAttribute("SpeedBuff", 12)
+	player.Character:SetAttribute("GodSpeed", true)
+	rs.RemoteEvents.MovementEvents.MoveEndEvent:FireClient(player)
+
+	
+	for _, parts in pairs(rs.VFX.KilluaVFX["GodSpeed Aura 2"]:GetChildren()) do
+		if parts.Name ~= "HumanoidRootPart" then
+			for _, vfx in pairs(parts:GetChildren()) do
+				local newVFX = vfx:Clone()
+				newVFX.Parent = player.Character[parts.Name]
+			end
+		end
+	end	
+end)
+
+
+
+rs.RemoteEvents.NenAbilities.KilluaMoves.V.OnServerEvent:Connect(function(player, target)
+	local checks = modScript.checkAll(player)
+	if checks == false or player.Character:GetAttribute("Busy") == true then return end
+	if cdManager.IsOnCooldown(player, "V") or player.Character:GetAttribute("Nen") < cdScript.Killua.V.Cost then return end
+	
+	cdManager.SetCooldown(player, "V", cdScript.Killua.V.Cooldown)
+	UICDEvent:FireClient(player, "V", cdScript.Killua.V.Cooldown)
+	player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")-cdScript.Killua.V.Cost)
+	rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, cdScript.Killua.V.Cost)
+	local hrp = player.Character.PrimaryPart
+	local dir = hrp.CFrame.LookVector*2
+	
+
+	modScript.applyAttackingState(player.Character, 1.6)
+	player.Character:SetAttribute("Busy", true)
+	handCrackle(player, 1)
+	
+	local anims = animScript:GetAnimations(player.Character)
+	anims.thunderComboClip:Play()
+	
+	
+	task.spawn(function()
+		task.wait(0.65)
+		
+		local hitbox = rs.VFX.Hitboxes.KilluaHitboxes.thunderComboHitbox:Clone()
+		hitbox.CFrame = hrp.CFrame + dir
+		hitbox.Parent = workspace
+		game:GetService("Debris"):AddItem(hitbox, 1)
+		
+		local m6D = Instance.new("WeldConstraint")
+		m6D.Parent = hitbox
+		m6D.Part0 = player.Character.PrimaryPart
+		m6D.Part1 = hitbox
+		
+		local hrpLook = hrp.CFrame.LookVector
+		local dir = Vector3.new(hrpLook.X, 0, hrpLook.Z)
+		local speed = 245
+		hrp.AssemblyLinearVelocity = dir*speed
+		
+		local hitboxParams = OverlapParams.new()
+		hitboxParams.FilterType = Enum.RaycastFilterType.Exclude
+		hitboxParams.FilterDescendantsInstances = {player.Character, hitbox}
+		
+		local hitPlayers = {}
+		local hitSomeone = false
+		
+		for i=1, 10, 1 do
+			local hits = workspace:GetPartBoundsInBox(hitbox.CFrame, hitbox.Size, hitboxParams)
+		
+			for _, hit in hits do
+				local hum = hit.Parent:FindFirstChild("Humanoid")
+				if hum and not hitPlayers[hit.Parent] then
+					
+					local lv = Instance.new("LinearVelocity")
+					lv.Name = "HaltLV"
+					lv.Attachment0 = hrp:FindFirstChild("RootAttachment") or Instance.new("Attachment", hrp)
+					lv.MaxForce = 1e10
+					lv.VectorVelocity = Vector3.new(0, 0, 0)
+					lv.Parent = hrp
+					
+					local lv2 = Instance.new("LinearVelocity")
+					lv2.Name = "HaltLV2"
+					lv2.Attachment0 = hit.Parent.PrimaryPart:FindFirstChild("RootAttachment") or Instance.new("Attachment", hit.Parent.PrimaryPart)
+					lv2.MaxForce = 1e10
+					lv2.VectorVelocity = Vector3.new(0, 0, 0)
+					lv2.Parent = hit.Parent.PrimaryPart
+					
+					--player.Character:SetAttribute("Busy", true)
+					player.Character.Humanoid.WalkSpeed = 0
+					modScript.setCollisionGroup(hit.Parent,4)
+					modScript.setCollisionGroup(player.Character, 4)
+					modScript.stun(hit.Parent, 4)
+					hitPlayers[hit.Parent] = true
+					hitSomeone = true
+					handCrackle(player, 4)
+					local originalRotation = hrp.CFrame - hrp.Position
+					hrp.CFrame = CFrame.new(hit.Parent.PrimaryPart.CFrame.Position+hit.Parent.PrimaryPart.CFrame.LookVector*3) * (originalRotation - Vector3.zero)
+					
+					--anims.thunderHurtClip:Play()
+					local anim = rs.NenAbilities.Killua.KilluaAnims.thunderHurt
+					local clip = hum.Animator:LoadAnimation(anim)
+					clip:Play()
+					
+					local damage = cdScript.Killua.V.Damage
+					local blockingDamage = math.floor((damage/2)*10+0.5)/10
+					
+					task.spawn(function()
+						for i=1, 7, 1 do
+							if i == 7 then
+								lv:Destroy()
+								lv2:Destroy()
+								modScript.damageLooks(player, hit, damage)
+								hum:TakeDamage(damage)
+								rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, damage)
+								modScript.knockback(player.Character, hit.Parent, 30)
+								ragdollModule:Ragdoll(hit.Parent, 1)
+								
+							else
+								modScript.damageLooks(player, hit, damage)
+								hum:TakeDamage(damage)
+								rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, damage)
+							end
+							local palmVFX = rs.VFX.KilluaVFX.ThunderPalmHit:Clone()
+							palmVFX.Position = hit.Parent.PrimaryPart.Position + Vector3.new(0, 1, 0)
+							--palmVFX.Zone.Position = hit.Parent.HumanoidRootPart.Position + Vector3.new(0, 0, 0)
+							palmVFX.Parent = game.Workspace
+							game:GetService("Debris"):AddItem(palmVFX, 1.5)
+							task.spawn(function()
+								task.wait(0.01)
+								for _, v in pairs(palmVFX:GetChildren()) do
+									if v:IsA("Attachment") or v:IsA("Part") then
+										for _, j in pairs(v:GetChildren()) do
+											j:Emit(j:GetAttribute("EmitCount"))
+										end
+									end
+								end
+							end)
+							task.wait(0.5)
+						end
+						--anims.thunderHurtClip:Stop()
+						clip:Stop()
+						player.Character:SetAttribute("Busy", false)
+						player.Character.Humanoid.WalkSpeed = player.Character:GetAttribute("Speed")
+						anims.thunderComboClip:Stop()
+						return
+					end)
+				
+				end
+			end
+			task.wait(0.1)
+		end
+		if hitSomeone then
+			task.wait(anims.thunderComboClip.Length-0.65)
+		end
+		anims.thunderComboClip:Stop()
+		player.Character:SetAttribute("Busy", false)
+		player.Character.Humanoid.WalkSpeed = player.Character:GetAttribute("Speed")
+		
+		return
+	end)
+	
+end)
