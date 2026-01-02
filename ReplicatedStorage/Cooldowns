@@ -1,0 +1,41 @@
+local cooldowns = {
+	["Kite"] = {
+		["Title"] = "Crazy Slots",
+		["NumMoves"] = 3,
+		[""] = {
+			["Z"] = {["Cooldown"] = 3, ["Name"] = "Gamble", ["Cost"] = 10, ["Mastery"] = 0, ["Damage"] = 0},
+			["X"] = {["Cooldown"] = 3, ["Name"] = "Gamble", ["Cost"] = 10, ["Mastery"] = 0, ["Damage"] = 0},
+			["C"] = {["Cooldown"] = 3, ["Name"] = "Gamble", ["Cost"] = 10, ["Mastery"] = 0, ["Damage"] = 0},
+		},
+		["SpawnedGun"] = {
+			["Z"] = {["Cooldown"] = 3, ["Name"] = "Gamble", ["Cost"] = 10, ["Mastery"] = 0, ["Damage"] = 0},
+			["X"] = {["Cooldown"] = 12, ["Name"] = "Barrage", ["Cost"] = 20, ["Mastery"] = 0, ["Damage"] = 1},
+			["C"] = {["Cooldown"] = 16, ["Name"] = "Final Shot", ["Cost"] = 25, ["Mastery"] = 0, ["Damage"] = 20},
+		},
+		["SpawnedScythe"] = {
+			["Z"] = {["Cooldown"] = 3, ["Name"] = "Gamble", ["Cost"] = 10, ["Mastery"] = 0, ["Damage"] = 0},
+			["X"] = {["Cooldown"] = 12, ["Name"] = "Silent Reap", ["Cost"] = 15, ["Mastery"] = 0, ["Damage"] = 30},
+			["C"] = {["Cooldown"] = 12, ["Name"] = "Death Waltz", ["Cost"] = 20, ["Mastery"] = 0, ["Damage"] = 20},
+		}
+	},
+	["Nobunaga"] = {
+		["C"] = 5
+	},
+	["Killua"] = {
+		["Title"] = "Godspeed",
+		["NumMoves"] = 4,
+		["Z"] = {["Cooldown"] = 10, ["Name"] = "Thunderbolt", ["Cost"] = 20, ["Mastery"] = 0, ["Damage"] = 20},
+		["X"] = {["Cooldown"] = 10, ["Name"] = "Lightning Palm", ["Cost"] = 15, ["Mastery"] = 0, ["Damage"] = 20},
+		["C"] = {["Cooldown"] = 10, ["Name"] = "Godspeed", ["Cost"] = 40, ["Mastery"] = 0, ["Damage"] = 0},
+		["V"] = {["Cooldown"] = 10, ["Name"] = "Thunder Blitz", ["Cost"] = 25, ["Mastery"] = 0, ["Damage"] = 4},
+	},
+	["Gon"] = {
+		["Title"] = "Gon",
+		["NumMoves"] = 3,
+		["Z"] = {["Cooldown"] = 10, ["Name"] = "Rock", ["Cost"] = 20, ["Mastery"] = 0, ["Damage"] = 25},
+		["X"] = {["Cooldown"] = 10, ["Name"] = "Paper", ["Cost"] = 20, ["Mastery"] = 0, ["Damage"] = 20},
+		["C"] = {["Cooldown"] = 10, ["Name"] = "Scissors", ["Cost"] = 20, ["Mastery"] = 0, ["Damage"] = 20},
+	}
+}
+
+return cooldowns
