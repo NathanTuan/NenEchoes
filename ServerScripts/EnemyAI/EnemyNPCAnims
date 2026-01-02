@@ -1,0 +1,39 @@
+local rs = game:GetService("ReplicatedStorage")
+
+
+local AnimationManager = {}
+
+local hurt_1Anim = rs:WaitForChild("HurtAnims"):WaitForChild("hurtAnim (1)")
+local hurt_2Anim = rs:WaitForChild("HurtAnims"):WaitForChild("hurtAnim (2)")
+local m1Folder = rs:WaitForChild("M1Anims")
+local M1_1Anim = m1Folder:WaitForChild("M1 1")
+local M1_2Anim = m1Folder:WaitForChild("M1 2")
+local M1_3Anim = m1Folder:WaitForChild("M1 3")
+local M1_4Anim = m1Folder:WaitForChild("M1 4")
+local M1_5Anim = m1Folder:WaitForChild("M1 5")
+local movementAnims = rs:WaitForChild("MovementAnims")
+local rollAnim = movementAnims:WaitForChild("rollAnim")
+local backRollAnim = movementAnims:WaitForChild("backRollAnim")
+
+function AnimationManager:GetAnimations(character)
+
+	local animator = character:WaitForChild("Humanoid"):WaitForChild("Animator")
+	
+
+	local anims = {
+		hurt_1 = animator:LoadAnimation(hurt_1Anim),
+		hurt_2 = animator:LoadAnimation(hurt_2Anim),
+		M1_1 = animator:LoadAnimation(M1_1Anim),
+		M1_2 = animator:LoadAnimation(M1_2Anim),
+		M1_3 = animator:LoadAnimation(M1_3Anim),
+		M1_4 = animator:LoadAnimation(M1_4Anim),
+		M1_5 = animator:LoadAnimation(M1_5Anim),
+		roll = animator:LoadAnimation(rollAnim),
+		backRoll = animator:LoadAnimation(backRollAnim),
+	}	
+
+	return anims
+
+end
+
+return AnimationManager
