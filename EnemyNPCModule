@@ -1,0 +1,171 @@
+local module = {}
+
+local modScript = require(game:GetService("ServerScriptService").ModuleScript)
+local ragdollModule = require(game:GetService("ServerScriptService").ragdollModule)
+local rs = game:GetService("ReplicatedStorage")
+
+
+module.punch = function(dummy, enemyNPCAnims, hitPlayers)
+	
+	if dummy then
+		local hum = dummy.Humanoid
+		if hum then
+
+
+			if dummy:GetAttribute("Cooldown") == true or dummy:GetAttribute("Stunned") == true then return end
+
+			dummy:SetAttribute("Cooldown", true)
+
+			--local clip = dummy.Humanoid.Animator:LoadAnimation(rs.M1Anims["M1 "..dummy:GetAttribute("Combo")])
+			--clip:Play()
+			local anims = enemyNPCAnims[dummy]
+			anims["M1_"..dummy:GetAttribute("Combo")]:Play()
+			modScript.knockback(dummy, dummy, 10)
+			task.spawn(function()
+				task.wait(0.23)
+				if dummy:GetAttribute("Stunned") == true then return end
+				local hitbox = Instance.new("Part")
+				hitbox.Size = Vector3.new(5, 6, 5)
+				hitbox.Transparency = 1
+				hitbox.CanCollide = false
+				hitbox.CanQuery = false
+				hitbox.Anchored = true
+				hitbox.BrickColor = BrickColor.new("Bright red")
+				hitbox.Parent = game.Workspace
+				hitbox.Position = dummy.PrimaryPart.Position + dummy.PrimaryPart.CFrame.LookVector*3
+				hitbox.Name = "Hitbox"
+
+				game:GetService("Debris"):AddItem(hitbox, 0.3)
+
+
+				local hitboxParams = OverlapParams.new()
+				hitboxParams.FilterDescendantsInstances = {dummy, hitbox}
+				hitboxParams.FilterType = Enum.RaycastFilterType.Exclude
+				hitboxParams.MaxParts = 50
+
+				local partsInBox = workspace:GetPartBoundsInBox(hitbox.CFrame, hitbox.Size, hitboxParams)
+
+
+				for _, v in partsInBox do
+					local hum = v.Parent:FindFirstChild("Humanoid")
+
+					if hum and not hitPlayers[v.Parent] and not v.Parent:HasTag("EnemyNPC") then	
+
+						hitPlayers[v.Parent] = true
+						task.delay(0.3, function()
+							hitPlayers[v.Parent] = nil
+						end)
+						if dummy:GetAttribute("Combo") < 5 then
+							if v.Parent:GetAttribute("Parrying") == true then
+
+								local parryFX = rs.VFX.CombatVFX.parryFX:Clone()
+
+
+								local arm = v.Parent:FindFirstChild("Left Arm")
+								if arm then
+									local armForward = arm.CFrame.RightVector
+									parryFX.Position = arm.Position + armForward *1
+									local m6D = Instance.new("Motor6D")
+									m6D.Parent = arm
+									m6D.Part0 = arm
+									m6D.Part1 = parryFX
+									m6D.C1 = CFrame.new(0, 0, 1)
+									game:GetService("Debris"):AddItem(m6D, 3)
+								end
+
+								parryFX.Parent = game.Workspace
+								task.wait(0.1)
+								for _, att in pairs(parryFX:GetChildren()) do
+									for _, emitter in pairs(att:GetChildren()) do
+										emitter:Emit(emitter:GetAttribute("EmitCount"))
+									end
+								end
+								game:GetService("Debris"):AddItem(parryFX, 3)
+
+								modScript.stun(dummy, 0.8)
+								modScript.stun(v.Parent, 0.6)
+
+							elseif v.Parent:GetAttribute("Blocking") == true then
+								hum:TakeDamage(2)
+								modScript.Outline(v.Parent)
+							else
+
+								modScript.stun(hum.Parent, 1.3)
+								hum:TakeDamage(5)
+								modScript.Outline(v.Parent)
+							end
+						else
+							if v.Parent:GetAttribute("Parrying") == true then
+								modScript.createHitEffect(v.Parent.PrimaryPart.Position + Vector3.new(0, 0.9, -1.5), rs.VFX.CombatVFX.parryFX)
+							else
+								modScript.stun(hum.Parent, 2)
+								modScript.knockback(dummy, hum.Parent, 50)
+								ragdollModule:Ragdoll(hum.Parent, 2)
+								hum:TakeDamage(8)
+								if v.Parent:GetAttribute("Blocking") == true then
+									modScript.blockbreak(v.Parent)
+								end
+								modScript.Outline(v.Parent)
+							end
+						end
+					end
+				end
+			end)
+
+			task.wait(0.3)
+			if dummy:GetAttribute("Combo") < 5 then
+				dummy:SetAttribute("Combo", dummy:GetAttribute("Combo")+1)
+				dummy:SetAttribute("Cooldown", false)
+				--dummy:SetAttribute("Attacking", false)
+			else
+				dummy:SetAttribute("Combo", 1)
+				task.wait(2.5)
+				--dummy:SetAttribute("Attacking", false)
+				--task.wait(0.9)
+				dummy:SetAttribute("Cooldown", false)
+			end
+		end
+	end
+	
+end
+
+
+
+module.roll = function(dummy, dir, enemyNPCAnims)
+
+	if dummy:GetAttribute("Stunned") == true or dummy:GetAttribute("Attacking") == true or dummy:GetAttribute("Dashing") == true then return end
+
+
+	local hrp = dummy.PrimaryPart
+	local moveDir = hrp.CFrame.LookVector
+	moveDir = Vector3.new(moveDir.X, 0, moveDir.Z)
+
+
+
+
+	if dir == "Back" then
+		moveDir = moveDir * -1
+		enemyNPCAnims[dummy].backRoll:Play()
+	end
+
+	moveDir = moveDir.Unit
+
+	dummy:SetAttribute("Dashing", true)
+	--player.Character:SetAttribute("Busy", true)
+
+	enemyNPCAnims[dummy].roll:Play()
+
+	hrp.AssemblyLinearVelocity = moveDir * 100
+	task.wait(0.17)
+	hrp.AssemblyLinearVelocity = Vector3.zero
+
+	task.spawn(function()
+		task.wait(2)
+		dummy:SetAttribute("Dashing", false)
+	end)
+
+end
+
+
+
+return module
