@@ -1,3 +1,7 @@
+
+CURRENTLY INCOMPLETE; STILL MIGRATING SCRIPTS
+
+
 Nen Echoes is a game developed in Roblox Studio using Luau. 
 
 Navigate to the folder of "ServerScripts" to access scripts run on the server-side and navigate to the folder named "Local Scripts"
