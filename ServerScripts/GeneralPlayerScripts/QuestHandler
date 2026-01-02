@@ -1,0 +1,64 @@
+local rs = game:GetService("ReplicatedStorage")
+local ss = game:GetService("ServerStorage")
+local questText = require(rs.QuestText)
+local inventoryModule = require(ss.DataStoreModules.InventoryModule)
+local inventoryText = require(rs.InventoryText)
+
+
+
+rs.StatRemoteEvents.AssignQuestEvent.OnServerEvent:Connect(function(player, islandID, batchID) --IDs are just num, no string
+	
+	local islandRef = "Island"..tostring(islandID)
+	local batchRef = "Batch"..tostring(batchID)
+	
+	if not player.Quests:FindFirstChild(islandRef) then
+		local folder = Instance.new("Folder")
+		folder.Name = islandRef
+		folder.Parent = player.Quests
+	end
+	
+	if not player.Quests:FindFirstChild(islandRef):FindFirstChild(batchRef) then
+		local folder = Instance.new("Folder")
+		folder.Name = batchRef
+		folder.Parent = player.Quests[islandRef]
+	end
+	
+	local progress = Instance.new("IntValue")
+	progress.Name = "Progress"
+	progress.Value = 0
+	progress.Parent = player.Quests[islandRef][batchRef]
+	
+	local enemy = questText[islandRef][batchRef]["SpawnEnemy"]
+	if enemy then
+		local spawnedEnemy = ss.EnemyNPCS[islandRef][batchRef][enemy]:Clone()
+		spawnedEnemy:PivotTo(game.Workspace.EnemyNPCS[islandRef][batchRef][enemy.."Pos"].CFrame) 
+		spawnedEnemy.Parent = game.Workspace.EnemyNPCS[islandRef][batchRef]
+	end
+	
+end)
+
+
+rs.StatRemoteEvents.FinishQuestEvent.OnServerEvent:Connect(function(player, islandID, batchID) --Ids are Number+string
+	print("Finishing Quest. Allocating rewards.")
+	player.Quests[islandID][batchID].Progress:Destroy()
+	
+	local rewards = questText[islandID][batchID]["Rewards"]
+	
+	for tableName, tableObject in pairs(rewards) do
+		local itemType = tableObject["Type"]
+		local itemQty = tableObject["Qty"]
+		
+		if itemType == "Item" then
+			--rs.StatRemoteEvents.UpdateInventory:FireClient(player, tableName, itemQty)
+			inventoryModule.UpdateInventory(player, tableName, itemQty)
+		else
+			if itemType == "XP" then
+				rs.StatRemoteEvents.XP:FireClient(player, itemQty)
+			end
+		end
+	end
+	
+	
+	
+end)
+
