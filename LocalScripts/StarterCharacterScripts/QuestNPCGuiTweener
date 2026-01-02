@@ -1,0 +1,87 @@
+local Players = game:GetService("Players")
+local tweenService = game:GetService("TweenService")
+local transpInfo = TweenInfo.new(0.4, Enum.EasingStyle.Linear, Enum.EasingDirection.In)
+local expandInfo = TweenInfo.new(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local hrp = character:WaitForChild("HumanoidRootPart")
+
+
+local displayRange = 20
+local underlineSize = UDim2.new(0.75, 0,0.015, 0)
+local textSize = UDim2.new(1, 0, 0.3, 0)
+local symbolSize = UDim2.new(0.15, 0, 0.15, 0)
+
+
+local guiTable = {}
+for _, desc in pairs(game.Workspace:WaitForChild("QuestNPCS"):GetDescendants()) do
+	if desc:IsA("BillboardGui") and desc.Name =="NameTag" then
+		if desc and not guiTable[desc] then
+			guiTable[desc] = {
+				["HRP"] = desc.Parent:WaitForChild("HumanoidRootPart"),
+				["Displaying"] = false,
+			}
+		end
+	end
+end
+
+
+game.Workspace:WaitForChild("QuestNPCS").DescendantAdded:Connect(function(desc)
+	if desc:IsA("BillboardGui") then
+		if desc and not guiTable[desc] then
+			guiTable[desc] = {
+				["HRP"] = desc.Parent:WaitForChild("HumanoidRootPart"),
+				["Displaying"] = false,
+			}
+		end
+	end
+end)
+
+
+
+
+local function openingTweens(guiObject)
+	task.spawn(function()
+
+		local nameLabel = guiObject.CanvasGroup.NameLabel
+		local transpTween = tweenService:Create(guiObject.CanvasGroup, transpInfo, {GroupTransparency = 0}):Play()
+		local expandTween2 = tweenService:Create(nameLabel, expandInfo, {Size = textSize}):Play()
+	
+	end)
+end
+
+local function closingTweens(guiObject)
+	task.spawn(function()
+		
+		local nameLabel = guiObject.CanvasGroup.NameLabel
+		local expandTween = tweenService:Create(nameLabel, expandInfo, {Size = UDim2.new(0, 0, textSize.Y.Scale, 0)}):Play()
+		local transpTween = tweenService:Create(guiObject.CanvasGroup, transpInfo, {GroupTransparency = 1}):Play()
+	end)
+end
+
+
+
+
+task.spawn(function()
+	while true do
+		task.wait(0.1) 
+		
+		for key, data in pairs(guiTable) do
+			
+			local dist = (data.HRP.CFrame.Position - hrp.CFrame.Position).Magnitude
+			
+			if dist <= displayRange then
+				if data.Displaying == false then 
+					data.Displaying = true
+					openingTweens(key)
+				end
+			else
+				if data.Displaying == true then
+					data.Displaying = false
+					closingTweens(key)
+				end
+			end
+		end
+	end
+end)
