@@ -1,0 +1,23 @@
+local rs = game:GetService("ReplicatedStorage")
+local openSetUI = rs.RemoteEvents.UIEvents.OpenSetUI
+local closeSetUI = rs.RemoteEvents.UIEvents.CloseSetUI
+local IHateUI = rs.RemoteEvents.UIEvents.IHateUI
+
+
+IHateUI.OnServerEvent:Connect(function(player, bool)
+	if bool ~= nil then
+		player.Character:SetAttribute("AbilityEnabled", bool)
+		
+	else
+		player.Character:SetAttribute("AbilityEnabled", not player.Character:GetAttribute("AbilityEnabled"))
+		
+	end
+	player.Character:SetAttribute("M1Activated", false)
+	if player.Character:GetAttribute("AbilityEnabled") == true then
+		openSetUI:FireClient(player)
+	else
+		closeSetUI:FireClient(player)
+	end
+end)
+
+
