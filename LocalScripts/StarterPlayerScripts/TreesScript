@@ -1,0 +1,75 @@
+-- Services
+--task.wait(30)
+local RunService = game:GetService("RunService")
+
+local swaySpeed = 0.5
+local swayParts = {} 
+local count = 0
+for _, folder in pairs(game.Workspace:WaitForChild("trees"):GetChildren()) do
+	for _, tree in pairs(folder:GetChildren()) do
+		local leaves = tree:FindFirstChild("Leaf")
+		if leaves then
+			for _, leaf in pairs(leaves:GetChildren()) do
+				--count = count+1
+				--leaf.Color = Color3.fromRGB(100, 100, 100)
+				if leaf:IsA("BasePart") then
+					table.insert(swayParts, {
+						part = leaf,
+						basePos = leaf.CFrame.Position,
+						baseRot = leaf.CFrame.Rotation,
+						randOffset = math.random() * math.pi * 2,
+					})
+				end
+			end
+		end
+	end
+end
+
+
+game.Workspace:WaitForChild("trees").DescendantAdded:Connect(function(desc)
+	if desc.Parent.Name == "Leaf" then
+		if desc:IsA("BasePart") then
+			table.insert(swayParts, {
+				part = desc,
+				basePos = desc.CFrame.Position,
+				baseRot = desc.CFrame.Rotation,
+				randOffset = math.random() * math.pi * 2,
+			})
+		end
+	end
+end)
+
+local T = 0
+
+local player = game.Players.LocalPlayer
+local T = 0
+local maxDistance = 80
+local maxDistanceSq = maxDistance * maxDistance
+
+RunService.Heartbeat:Connect(function(dt)
+	--[[
+	local character = player.Character
+	if not character or not character:FindFirstChild("HumanoidRootPart") then
+		return 
+	end
+	]]
+	--local playerPos = character.HumanoidRootPart.Position
+	T += dt * swaySpeed
+
+	for _, info in ipairs(swayParts) do
+		local leaf = info.part
+		if leaf and leaf.Parent then
+			--local offset = playerPos - info.basePos
+			--local distSq = offset.X*offset.X + offset.Y*offset.Y + offset.Z*offset.Z
+
+			--if distSq <= maxDistanceSq then
+			local xOffset = math.sin(T + info.randOffset) * 0.5
+			local zOffset = math.sin(T/2 + info.randOffset) * 0.3
+
+			leaf.CFrame = CFrame.new(info.basePos.X + xOffset, info.basePos.Y, info.basePos.Z + zOffset) * 
+				CFrame.Angles(info.baseRot.X + xOffset/2, 0, info.baseRot.Z + zOffset/2)
+			--end
+		end
+	end
+end)
+
