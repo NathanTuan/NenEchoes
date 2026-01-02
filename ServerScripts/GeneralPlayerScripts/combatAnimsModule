@@ -1,0 +1,44 @@
+local rs = game:GetService("ReplicatedStorage")
+
+local AnimationManager = {}
+
+local cache = {} 
+
+local m1Folder = rs:WaitForChild("M1Anims")
+local M1_1Anim = m1Folder:WaitForChild("M1 1")
+local M1_2Anim = m1Folder:WaitForChild("M1 2")
+local M1_3Anim = m1Folder:WaitForChild("M1 3")
+local M1_4Anim = m1Folder:WaitForChild("M1 4")
+local M1_5Anim = m1Folder:WaitForChild("M1 5")
+local parryAnim = m1Folder:WaitForChild("Parry")
+local blockAnim = m1Folder:WaitForChild("Block")
+
+
+function AnimationManager:GetAnimations(character)
+	if cache[character] then
+		return cache[character]
+	end
+
+	local humanoid = character:WaitForChild("Humanoid")
+	local animator = humanoid:WaitForChild("Animator")
+
+
+
+	local anims = {
+		M1_1 = animator:LoadAnimation(M1_1Anim),
+		M1_2 = animator:LoadAnimation(M1_2Anim),
+		M1_3 = animator:LoadAnimation(M1_3Anim),
+		M1_4 = animator:LoadAnimation(M1_4Anim),
+		M1_5 = animator:LoadAnimation(M1_5Anim),
+		parry = animator:LoadAnimation(parryAnim),
+		block = animator:LoadAnimation(blockAnim),
+	}
+	cache[character] = anims
+	return anims
+end
+
+function AnimationManager:ClearCache(character)
+	cache[character] = nil
+end
+
+return AnimationManager
