@@ -1,0 +1,20 @@
+local rs = game:GetService("ReplicatedStorage")
+local ss = game:GetService("ServerStorage")
+local inventoryItems = ss.DataStoreModules.InventoryItems
+local modScript = require(game:GetService("ServerScriptService").ModuleScript)
+
+rs.RemoteEvents.CombatEvents.EquipToolEvent.OnServerEvent:Connect(function(player, itemName, bool)
+	local tool = player.Backpack:FindFirstChild(itemName)
+	if tool then
+		tool = player.Backpack[itemName]
+	else
+		tool = inventoryItems[itemName]:Clone()
+		tool.Parent = player.Backpack
+	end
+	
+	if bool == true then
+		player.Character.Humanoid:EquipTool(tool)
+	else
+		player.Character.Humanoid:UnequipTools()
+	end
+end)
