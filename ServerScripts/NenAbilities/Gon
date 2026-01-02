@@ -1,0 +1,509 @@
+local rs = game:GetService("ReplicatedStorage")
+local modScript = require(game.ServerScriptService.ModuleScript)
+local cdManager = require(rs.CooldownManager)
+local cdScript = require(rs.Cooldowns)
+local animScript = require(script.Parent.NenAbilityAnimationManager)
+local ragdollModule = require(game.ServerScriptService.ragdollModule)
+local UICDEvent = rs.RemoteEvents.UIEvents.UICDEvent
+
+
+
+rs.RemoteEvents.NenAbilities.GonMoves.Z.OnServerEvent:Connect(function(player, target, bool)
+
+	if bool == false then
+		local checks = modScript.checkAll(player)
+		if checks == false then 
+			return
+		end
+		if cdManager.IsOnCooldown(player, "Z") == true or player.Character:GetAttribute("Nen") < cdScript.Gon.Z.Cost then return end
+		player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")-cdScript.Gon.Z.Cost)
+		rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, cdScript.Gon.Z.Cost)
+		cdManager.SetCooldown(player, "Z", cdScript.Gon.Z.Cooldown)
+		UICDEvent:FireClient(player, "Z", cdScript.Gon.Z.Cooldown)
+		
+	
+		player.Character:SetAttribute("Busy", true)
+		player.Character.Humanoid.WalkSpeed = 0
+		player.Character.Humanoid.JumpHeight = 0
+		local anims = animScript:GetAnimations(player.Character)
+		anims.rockClip:Play()
+		
+		local powerUpVFX = rs.VFX.GonVFX.Rock.PowerUp:Clone()
+		powerUpVFX.Position = player.Character["Right Arm"].Position
+		powerUpVFX.Parent = game.Workspace
+		local m6D = Instance.new("Motor6D")
+		m6D.Parent = powerUpVFX
+		m6D.Part0 = powerUpVFX
+		m6D.Part1 = player.Character["Right Arm"]
+		m6D.C1 = CFrame.new(0, 0, player.Character["Right Arm"].Size.Z/2)
+		
+		for _, att in pairs(powerUpVFX.Main:GetChildren()) do
+			for _, emitter in pairs(att:GetChildren()) do
+				emitter.Enabled = true
+			end
+		end
+		
+		local windVFX = rs.VFX.GonVFX.Rock.WindForCharacter:Clone()
+		windVFX.Position = player.Character.PrimaryPart.Position + Vector3.new(0, 1, 0)
+		windVFX.Parent = game.Workspace
+		for _, att in pairs(windVFX.Main:GetChildren()) do
+			for _, emitter in pairs(att:GetChildren()) do
+				emitter.Enabled = true
+			end
+		end
+		
+		local hrp = player.Character.PrimaryPart
+		local direction = (target-hrp.Position).Unit*27
+		local vectorGoal = direction + hrp.Position
+		hrp.CFrame = CFrame.lookAt(hrp.Position, vectorGoal)
+		
+		task.spawn(function()
+			
+			task.wait(1.1)
+			powerUpVFX:Destroy()
+			windVFX:Destroy()
+		
+			rs.RemoteEvents.NenAbilities.GonMoves.Z:FireClient(player)
+		end)
+	else
+		local hrp = player.Character.PrimaryPart
+		local direction = (target-hrp.Position).Unit*27
+		local vectorGoal = direction + hrp.Position
+		
+		local punchVFX = rs.VFX.GonVFX.Rock.Punch:Clone()
+		game:GetService("Debris"):AddItem(punchVFX, 2)
+		punchVFX.CFrame = CFrame.lookAt(hrp.Position, vectorGoal) * CFrame.Angles(0, math.rad(90), 0) * CFrame.new(7, 0, 0)
+		punchVFX.Parent = game.Workspace
+		task.wait(0.05)
+
+		for _, att in pairs(punchVFX.Main:GetChildren()) do
+			for _, emitter in pairs(att:GetChildren()) do
+				emitter:Emit(emitter:GetAttribute("EmitCount"))
+			end
+		end
+
+		local hitbox = rs.VFX.Hitboxes.GonHitboxes.rockHitbox:Clone()
+		hitbox.CFrame = CFrame.lookAt(hrp.Position, vectorGoal) * CFrame.new(0, 0, -5.5)
+		hrp.CFrame = CFrame.lookAt(hrp.Position, vectorGoal)
+		hitbox.Parent = game.Workspace
+		hitbox.Name = "CMoveBox"
+		game:GetService("Debris"):AddItem(hitbox, 0.1)
+
+
+		local hitboxParams = OverlapParams.new()
+		hitboxParams.FilterType = Enum.RaycastFilterType.Exclude
+		hitboxParams.FilterDescendantsInstances = {player.Character, hitbox}
+		local hits = workspace:GetPartBoundsInBox(hitbox.CFrame, hitbox.Size, hitboxParams)
+		local hitPlayers = {}
+
+		for _, hit in hits do
+
+			local hum = hit.Parent:FindFirstChild("Humanoid")
+			if hum and not hitPlayers[hum.Parent] then
+				hitPlayers[hum.Parent] = true
+				local damage = cdScript.Gon.Z.Damage
+				local blockingDamage = math.floor((damage/2)*10+0.5)/10
+				
+				if hit.Parent:GetAttribute("Parrying") == true then
+					local parryFX = rs.VFX.CombatVFX.parryFX:Clone()
+					parryFX.Position = hit.Parent.PrimaryPart.Position
+					parryFX.Parent = game.Workspace
+					task.wait(0.05)
+					game:GetService("Debris"):AddItem(parryFX, 1)
+					for _, v in pairs(parryFX:GetChildren()) do
+						if v:IsA("ParticleEmitter") then
+							v:Emit(v:GetAttribute("EmitCount"))
+						end
+					end
+				elseif hit.Parent:GetAttribute("Blocking") == true then
+					hum:TakeDamage(blockingDamage)
+					modScript.damageLooks(player, hit, blockingDamage)
+					ragdollModule:Ragdoll(hit.Parent, 1.7)
+					modScript.knockback(player.Character, hit.Parent, 50)
+					modScript.stun(hit.Parent, 1.7)
+					modScript.blockbreak(hit.Parent)
+					rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, blockingDamage)
+					
+					local impactVFX = rs.VFX.GonVFX.Rock.FistCollision:Clone()
+					impactVFX.Position = hit.Parent.PrimaryPart.Position
+					impactVFX.Parent = game.Workspace
+					task.spawn(function()
+						task.wait(0.05)
+						for _, att in pairs(impactVFX.Main:GetChildren()) do
+							for _, emitter in pairs(att:GetChildren()) do
+								emitter:Emit(emitter:GetAttribute("EmitCount"))
+							end
+						end
+					end)
+					game:GetService("Debris"):AddItem(impactVFX, 2)
+					
+
+				else
+					hum:TakeDamage(damage)
+					modScript.damageLooks(player, hit, damage)
+					ragdollModule:Ragdoll(hit.Parent, damage)
+					modScript.knockback(player.Character, hit.Parent, 50)
+					modScript.stun(hit.Parent, 1.7)
+					rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, damage)
+					
+					local impactVFX = rs.VFX.GonVFX.Rock.FistCollision:Clone()
+					impactVFX.Position = hit.Parent.PrimaryPart.Position
+					impactVFX.Parent = game.Workspace
+					task.spawn(function()
+						task.wait(0.05)
+						for _, att in pairs(impactVFX.Main:GetChildren()) do
+							for _, emitter in pairs(att:GetChildren()) do
+								emitter:Emit(emitter:GetAttribute("EmitCount"))
+							end
+						end
+					end)
+					game:GetService("Debris"):AddItem(impactVFX, 2)
+				end
+
+
+			end
+			
+		end
+		player.Character:SetAttribute("Busy", false)
+		player.Character.Humanoid.WalkSpeed = player.Character:GetAttribute("Speed") + player.Character:GetAttribute("SpeedBuff")
+		player.Character.Humanoid.JumpHeight = 7.2
+	end
+
+	
+end)
+
+
+rs.RemoteEvents.NenAbilities.GonMoves.X.OnServerEvent:Connect(function(player, target, bool)
+	if bool == false then
+		local gc = cdScript.Gon.X.Cost
+		local checks = modScript.checkAll(player)
+		if checks == false then return end
+		if cdManager.IsOnCooldown(player, "X") == true or player.Character:GetAttribute("Nen") < gc then return end
+		player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")-gc)
+		rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, gc)
+		cdManager.SetCooldown(player, "X", cdScript.Gon.X.Cooldown)
+		UICDEvent:FireClient(player, "X", cdScript.Gon.X.Cooldown)
+		player.Character:SetAttribute("Busy", true)
+		player.Character.Humanoid.WalkSpeed = 0
+		player.Character.Humanoid.JumpHeight = 0
+
+		local hrp = player.Character.PrimaryPart
+		local direction = (target-hrp.Position).Unit*27
+		local vectorGoal = direction + hrp.Position
+		
+		hrp.CFrame = CFrame.lookAt(hrp.Position, vectorGoal)
+		local ball = rs.VFX.GonVFX.Paper.EnergyBall:Clone()
+		for _, att in pairs(ball:GetChildren()) do
+			for _, emitter in pairs(att:GetChildren()) do
+				
+				emitter.Enabled = true
+				
+			end
+		end
+		
+		local rightArm = player.Character["Right Arm"]
+		ball.CFrame = CFrame.lookAt(rightArm.Position, vectorGoal) * CFrame.new(0, 0, -1)
+		ball.Parent = game.Workspace
+		ball.Name = "XMoveBox"
+		
+		local m6D = Instance.new("Motor6D")
+		m6D.Parent = ball
+		m6D.Part0 = ball
+		m6D.Part1 = rightArm
+		m6D.C1 = CFrame.new(0, 0, rightArm.Size.Z/2)
+		
+		
+		local windVFX = rs.VFX.GonVFX.Rock.WindForCharacter:Clone()
+		windVFX.Position = player.Character.PrimaryPart.Position + Vector3.new(0, 1, 0)
+		windVFX.Parent = game.Workspace
+		for _, att in pairs(windVFX.Main:GetChildren()) do
+			for _, emitter in pairs(att:GetChildren()) do
+				emitter.Enabled = true
+			end
+		end
+		local anims = animScript:GetAnimations(player.Character)
+		anims.paperClip:Play()
+		task.spawn(function()
+			task.wait(1.3)
+			rs.RemoteEvents.NenAbilities.GonMoves.X:FireClient(player)
+			task.wait(0.2)
+			ball:Destroy()
+			windVFX:Destroy()
+			anims.paperClip:Stop()
+			player.Character:SetAttribute("Busy", false)
+			player.Character.Humanoid.WalkSpeed = player.Character:GetAttribute("Speed") + player.Character:GetAttribute("SpeedBuff")
+			player.Character.Humanoid.JumpHeight = 7.2
+		end)
+	
+	else
+		local hrp = player.Character.PrimaryPart
+		local direction = (target-hrp.Position).Unit*27
+		local vectorGoal = direction + hrp.Position
+		
+		
+		
+		local speed = 3
+
+		local ball = rs.VFX.GonVFX.Paper.Orb:Clone()
+		
+
+		local rightArm = player.Character["Right Arm"]
+		ball.CFrame = CFrame.lookAt(rightArm.Position, vectorGoal) * CFrame.new(0, 0, -1)
+		ball.Parent = game.Workspace
+		ball.Name = "XMoveBox"
+		
+		local bv = Instance.new("BodyVelocity")
+		bv.Velocity = direction * speed
+		bv.MaxForce = Vector3.new(1, 1, 1) * 1e5
+		bv.Parent = ball
+		game:GetService("Debris"):AddItem(ball, 1)
+		
+		local throwingVFX = rs.VFX.GonVFX.Paper.ThrowingPart:Clone()
+		throwingVFX.CFrame = CFrame.lookAt(hrp.Position, vectorGoal) * CFrame.Angles(0, math.rad(90), 0)
+		hrp.CFrame = CFrame.lookAt(hrp.Position, vectorGoal)
+		throwingVFX.Parent = game.Workspace
+		task.wait(0.05)
+		for _, att in pairs(throwingVFX.Main:GetChildren()) do
+			for _, emitter in pairs(att:GetChildren()) do
+				emitter:Emit(emitter:GetAttribute("EmitCount"))
+			end
+		end
+		
+		local hitPlayers = {}
+		ball.Touched:Connect(function(hit)
+			local hum = hit.Parent:FindFirstChild("Humanoid")
+			if hum and not hitPlayers[hum.Parent] and hit.Parent.Name ~= player.Character.Name then
+				hitPlayers[hum.Parent] = true
+				local damage = cdScript.Gon.X.Damage
+				local blockingDamage = math.floor((damage/2)*10+0.5)/10
+				
+				if hit.Parent:GetAttribute("Parrying") == true then
+					local parryFX = rs.VFX.CombatVFX.parryFX:Clone()
+					parryFX.Position = hit.Parent.PrimaryPart.Position
+					parryFX.Parent = game.Workspace
+					task.wait(0.05)
+					game:GetService("Debris"):AddItem(parryFX, 1)
+					for _, v in pairs(parryFX:GetChildren()) do
+						if v:IsA("ParticleEmitter") then
+							v:Emit(v:GetAttribute("EmitCount"))
+						end
+					end
+				elseif hit.Parent:GetAttribute("Blocking") == true then
+					hum:TakeDamage(blockingDamage)
+					modScript.damageLooks(player, hit, blockingDamage)
+					ragdollModule:Ragdoll(hit.Parent, 1.7)
+					modScript.stun(hit.Parent, 1.7)
+					modScript.blockbreak(hit.Parent)
+					rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, blockingDamage)
+					
+					local impactVFX = rs.VFX.GonVFX.Rock.FistCollision:Clone()
+					impactVFX.Position = hit.Parent.PrimaryPart.Position
+					impactVFX.Parent = game.Workspace
+					task.spawn(function()
+						task.wait(0.05)
+						for _, att in pairs(impactVFX.Main:GetChildren()) do
+							for _, emitter in pairs(att:GetChildren()) do
+								emitter:Emit(emitter:GetAttribute("EmitCount"))
+							end
+						end
+					end)
+					game:GetService("Debris"):AddItem(impactVFX, 2)
+
+				else
+					hum:TakeDamage(damage)
+					modScript.damageLooks(player, hit, damage)
+					ragdollModule:Ragdoll(hit.Parent, 1.7)
+					modScript.stun(hit.Parent, 1.7)
+					rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, damage)
+					
+					local impactVFX = rs.VFX.GonVFX.Rock.FistCollision:Clone()
+					impactVFX.Position = hit.Parent.PrimaryPart.Position
+					impactVFX.Parent = game.Workspace
+					task.spawn(function()
+						task.wait(0.05)
+						for _, att in pairs(impactVFX.Main:GetChildren()) do
+							for _, emitter in pairs(att:GetChildren()) do
+								emitter:Emit(emitter:GetAttribute("EmitCount"))
+							end
+						end
+					end)
+					game:GetService("Debris"):AddItem(impactVFX, 2)
+				end
+			end
+		end)
+		
+	end
+end)
+
+rs.RemoteEvents.NenAbilities.GonMoves.C.OnServerEvent:Connect(function(player, target)
+	
+
+	local gc = cdScript.Gon.C.Cost
+	local checks = modScript.checkAll(player)
+	if checks == false then return end
+	if cdManager.IsOnCooldown(player, "C") == true or player.Character:GetAttribute("Nen") < gc then return end
+	player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")-gc)
+	rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, gc)
+	cdManager.SetCooldown(player, "C", cdScript.Gon.C.Cooldown)
+	UICDEvent:FireClient(player, "C", cdScript.Gon.C.Cooldown)
+	
+	player.Character:SetAttribute("Busy", true)
+	player.Character.Humanoid.WalkSpeed = 0
+	player.Character.Humanoid.JumpHeight = 0
+	
+	local hrp = player.Character.PrimaryPart
+	local direction = (target-hrp.Position).Unit*27
+	local vectorGoal = direction + hrp.Position
+	hrp.CFrame = CFrame.lookAt(hrp.Position, vectorGoal)
+	local holdVFX = rs.VFX.GonVFX.Scissor.Hold:Clone()
+	for _, att in pairs(holdVFX.Main:GetChildren()) do
+		for _, emitter in pairs(att:GetChildren()) do
+			emitter.Enabled = true
+		end
+	end
+	for _, emitter in pairs(holdVFX:GetChildren()) do
+		if emitter:IsA("ParticleEmitter") then
+			emitter.Enabled = true
+		end
+	end
+	holdVFX.Position = player.Character.PrimaryPart.Position+Vector3.new(0, 0, 0)
+	holdVFX.Parent = game.Workspace
+	
+	local rightArm = player.Character["Right Arm"]
+	local scissorVFX = rs.VFX.GonVFX.Scissor.Blade:Clone()
+	scissorVFX.CFrame = rightArm.CFrame *CFrame.new(0, 0, 4)--*CFrame.Angles(0, math.rad(90), 0)
+	scissorVFX.Parent = rightArm
+	local m6D = Instance.new("Motor6D")
+	m6D.Parent = scissorVFX
+	m6D.Part0 = scissorVFX
+	m6D.Part1 = rightArm
+	m6D.C1 = CFrame.new(0, -1.7, 0)
+	game:GetService("Debris"):AddItem(scissorVFX, 2)
+	--scissorVFX.CFrame = CFrame.lookAt(hrp.Position, vectorGoal) --* CFrame.Angles(0, math.rad(90), 0)
+
+	
+	local windVFX = rs.VFX.GonVFX.Scissor.WindForCharacter:Clone()
+	for _, att in pairs(windVFX.Main:GetChildren()) do
+		if att.Name ~= "Impact" then
+			for _, emitter in pairs(att:GetChildren()) do
+				emitter.Enabled = true
+			end
+		else
+			task.spawn(function()
+				task.wait(0.05)
+				for _, emitter in pairs(att:GetChildren()) do
+					emitter:Emit(emitter:GetAttribute("EmitCount"))
+				end
+			end)
+			
+		end
+	end
+	windVFX.Position = player.Character.PrimaryPart.Position + Vector3.new(0, 1, 0)
+	windVFX.Parent = game.Workspace
+	
+	local anims = animScript:GetAnimations(player.Character)
+	anims.scissorClip:Play()
+	task.spawn(function()
+		task.wait(0.9)
+		windVFX:Destroy()
+		holdVFX:Destroy()
+		modScript.knockback(player.Character, player.Character, 100)
+		
+		local slashVFX = rs.VFX.GonVFX.Scissor.Slash:Clone()
+		slashVFX.CFrame = CFrame.lookAt(hrp.Position, vectorGoal) * CFrame.Angles(0, math.rad(90), 0) *CFrame.new(0, 0, 0)
+		slashVFX.Parent = game.Workspace
+		--[[
+		local m6D = Instance.new("Motor6D")
+		m6D.Parent = slashVFX
+		m6D.Part0= slashVFX
+		m6D.Part1 = player.Character.HumanoidRootPart
+		m6D.C1 = CFrame.new(0, 0, 0)*CFrame.Angles(0, math.rad(90), 0)
+		]]
+		
+		game:GetService("Debris"):AddItem(slashVFX, 2)
+		
+		task.wait(0.05)
+		for _, emitter in pairs(slashVFX.Slash:GetChildren()) do
+			emitter:Emit(emitter:GetAttribute("EmitCount"))
+		end
+		for _, att in pairs(slashVFX.TallSlash:GetChildren()) do
+			for _, emitter in pairs(att:GetChildren()) do
+				emitter:Emit(emitter:GetAttribute("EmitCount"))
+			end
+		end
+		
+		local hitbox = rs.VFX.Hitboxes.GonHitboxes.scissorHitbox:Clone()
+		hitbox.CFrame = CFrame.lookAt(hrp.Position, vectorGoal)
+		hrp.CFrame = CFrame.lookAt(hrp.Position, vectorGoal)
+		hitbox.Parent = game.Workspace
+		hitbox.Name = "CMoveBox"
+		game:GetService("Debris"):AddItem(hitbox, 1)
+
+
+		local hitboxParams = OverlapParams.new()
+		hitboxParams.FilterType = Enum.RaycastFilterType.Exclude
+		hitboxParams.FilterDescendantsInstances = {player.Character, hitbox}
+		
+		local m6D = Instance.new("Motor6D")
+		m6D.Parent = hitbox
+		m6D.Part0 = hitbox
+		m6D.Part1 = player.Character.PrimaryPart
+		m6D.C1 =  CFrame.new(0, 0, -4.5)
+
+		local hitPlayers = {}
+		for i=1, 10, 1 do
+			
+		
+			local hits = workspace:GetPartBoundsInBox(hitbox.CFrame, hitbox.Size, hitboxParams)
+			for _, hit in hits do
+
+				local hum = hit.Parent:FindFirstChild("Humanoid")
+				if hum and not hitPlayers[hum.Parent] then
+					hitPlayers[hum.Parent] = true
+					local damage = cdScript.Gon.C.Damage
+					local blockingDamage = math.floor((damage/2)*10+0.5)/10
+					
+					if hit.Parent:GetAttribute("Parrying") == true then
+						local parryFX = rs.VFX.CombatVFX.parryFX:Clone()
+						parryFX.Position = hit.Parent.PrimaryPart.Position
+						parryFX.Parent = game.Workspace
+						task.wait(0.05)
+						game:GetService("Debris"):AddItem(parryFX, 1)
+						for _, v in pairs(parryFX:GetChildren()) do
+							if v:IsA("ParticleEmitter") then
+								v:Emit(v:GetAttribute("EmitCount"))
+							end
+						end
+					elseif hit.Parent:GetAttribute("Blocking") == true then
+						hum:TakeDamage(blockingDamage)
+						modScript.damageLooks(player, hit, blockingDamage)
+						ragdollModule:Ragdoll(hit.Parent, 1.7)
+						modScript.stun(hit.Parent, 1.7)
+						modScript.blockbreak(hit.Parent)
+						rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, blockingDamage)
+
+					else
+						hum:TakeDamage(damage)
+						modScript.damageLooks(player, hit, damage)
+						ragdollModule:Ragdoll(hit.Parent, 1.7)
+						modScript.stun(hit.Parent, 1.7)
+						rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, damage)
+					end
+
+
+				end
+
+			end
+			task.wait(0.1)
+		end
+		player.Character:SetAttribute("Busy", false)
+		player.Character.Humanoid.WalkSpeed = player.Character:GetAttribute("Speed") + player.Character:GetAttribute("SpeedBuff")
+		player.Character.Humanoid.JumpHeight = 7.2
+		
+		
+	end)
+
+	
+end)
+
+
