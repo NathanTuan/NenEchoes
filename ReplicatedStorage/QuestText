@@ -1,0 +1,46 @@
+
+local questText = {
+	
+	["Island1"] = {
+		["Batch1"] = {
+			["Title"] = "Bandit Cleaning",
+			["Info"] = "These bandits have been wreaking havoc on the island. They are camping up on the hill to the right of the city. Can you defeat them?",
+			["Goal"] = 5,
+			["Enemy"] = "Bandits",
+			["SpawnEnemy"] = nil,
+			["ShortInfo"] = "Defeat 5 bandits",
+			["Rewards"] = {
+				["Gold"] = {
+					["Type"] = "Item",
+					["Qty"] = 100,
+				},
+				["XP"] = {
+					["Type"] = "XP",
+					["Qty"] = 500,
+				},
+			},
+		},
+		["Batch2"] = {
+			["Title"] = "Old Man and The Sea",
+			["Info"] = "Legends speak of a monstrous fish living in these ponds. If you can fish it up and bring it to me, I'll let you take the hunter exam.",
+			["Goal"] = 1,
+			["Enemy"] = "The Fish Monster",
+			["SpawnEnemy"] = nil,
+			["ShortInfo"] = "Find the legendary fish monster and subdue it",
+			["Rewards"] = {
+				["Gold"] = {
+					["Type"] = "Item",
+					["Qty"] = 500,
+				},
+				["XP"] = {
+					["Type"] = "XP",
+					["Qty"] = 1500,
+				},
+			},
+		},
+		
+	}
+}
+
+
+return questText
