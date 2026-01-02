@@ -1,0 +1,410 @@
+local rs = game:GetService("ReplicatedStorage")
+local ss = game:GetService("ServerStorage")
+local boss = script.Parent
+local hum = boss.Humanoid
+local tweenService = game:GetService("TweenService")
+local animator = hum:FindFirstChildOfClass("Animator")
+local playerContributionList = {}
+local modScript = require(game.ServerScriptService.ModuleScript)
+local ragdollModule = require(game.ServerScriptService.ragdollModule)
+local tweenService = game:GetService("TweenService")
+local inventoryModule = require(ss.DataStoreModules.InventoryModule)
+
+local function quadraticBezier(p0, p1, p2, t)
+	return (1 - t)^2 * p0 + 2 * (1 - t) * t * p1 + t^2 * p2
+end
+local function curveToPlayer(orb, player)
+	local char = player.Character
+	if not char or not orb then return end
+
+	local hrp = char.PrimaryPart
+	if not hrp then return end
+
+	local p0 = orb.Position
+	local p2 = hrp.Position + Vector3.new(0, 2, 0)
+
+	-- Middle control point lifted upward to make the curve
+	local p1 = (p0 + p2) / 2 + Vector3.new(0, 10, 0)
+
+	local travelTime = 0.5
+	local steps = 30
+	local dt = travelTime / steps
+
+	for i = 1, steps do
+		local t = i / steps
+		local pos = quadraticBezier(p0, p1, p2, t)
+
+		if orb:IsA("Model") and orb.PrimaryPart then
+			orb:PivotTo(CFrame.new(pos))
+		elseif orb:IsA("BasePart") then
+			orb.Position = pos
+		end
+
+		task.wait(dt)
+	end
+	orb:Destroy()
+end
+local spawnXPOrb = function(dummyPos, dummyVector, player)
+	for i=1, 10, 1 do
+		--print("SpawningOrb")
+		local orb = rs.VFX.gameProgVFX.XPOrb:Clone()
+		local randomOffset = Vector3.new(math.random(-1, 1), math.random(-1, 1), 0) 
+		local dummyLook = CFrame.new(dummyPos, dummyPos+dummyVector)
+		local worldOffset = dummyLook:VectorToWorldSpace(randomOffset)
+		orb.Position = dummyPos + worldOffset
+		orb.Parent = game.Workspace
+		task.spawn(function()
+			curveToPlayer(orb, player)
+		end)
+
+	end
+end
+
+
+for _, descendant in boss:GetDescendants() do
+	if descendant:IsA("BasePart") then
+		descendant.CollisionGroup = "TempNoCollide"
+	end
+end
+
+
+
+for _, track in ipairs(hum.Animator:GetPlayingAnimationTracks()) do
+	track:Stop(0)
+end
+
+
+local anims = {
+	idle = animator:LoadAnimation(script.idle),
+	walk = animator:LoadAnimation(script.walk),
+	bite = animator:LoadAnimation(script.bite),
+	slam = animator:LoadAnimation(script.slam),
+	spawn = animator:LoadAnimation(script.spawn),
+	death = animator:LoadAnimation(script.death),
+}
+
+anims.idle.Priority = Enum.AnimationPriority.Idle
+anims.walk.Priority = Enum.AnimationPriority.Movement
+anims.bite.Priority = Enum.AnimationPriority.Action
+anims.slam.Priority = Enum.AnimationPriority.Action
+anims.spawn.Priority = Enum.AnimationPriority.Action
+anims.death.Priority = Enum.AnimationPriority.Action
+
+
+task.spawn(function()
+
+	while true do
+		if not anims.idle.IsPlaying and boss:GetAttribute("State") == "Idle" then
+			anims.idle:Play()
+		elseif not anims.walk.IsPlaying and boss:GetAttribute("State") == "Moving" then
+			anims.walk:Play(0, 10)
+		end
+		task.wait(0.1)
+	end
+end)
+
+
+
+local prevHealth = hum.MaxHealth
+hum.HealthChanged:Connect(function(newHealth)
+--	print("NewHealth: "..newHealth)
+	local damage = math.floor((prevHealth-newHealth)*10+0.5)/10
+	prevHealth = newHealth
+
+	local attacker = boss.LastAttacker.Value
+	if attacker then
+		if not playerContributionList[attacker] then
+			playerContributionList[attacker] = 0
+		end
+		playerContributionList[attacker] = playerContributionList[attacker] + damage
+	else
+		task.delay(0.1, function()
+			local attacker = boss.LastAttacker.Value
+			if attacker then
+				if not playerContributionList[attacker] then
+					playerContributionList[attacker] = 0
+				end
+				playerContributionList[attacker] = playerContributionList[attacker] + damage
+			end
+		end)
+		
+	end
+	
+	
+	if newHealth <= 0 then
+		--print("ShouldDie")
+		if boss:GetAttribute("State") ~= "Dead" then
+			boss:SetAttribute("State", "Dead")
+			boss:SetAttribute("Hyperarmor", true)
+			
+			for i, v in pairs(hum.Animator:GetPlayingAnimationTracks()) do
+				v:Stop(1)
+			end
+			for _, v in pairs(boss:GetChildren()) do
+				if v:IsA("MeshPart") then
+					--v.Transparency = 0
+					local tween = tweenService:Create(v, TweenInfo.new(4), {Transparency = 1}):Play()
+					task.delay(anims.death.Length + 0.1, function()
+						local motor6D = v:FindFirstChildOfClass("Motor6D")
+						if motor6D then
+							motor6D.Part0 = nil
+						end
+					end)
+					
+				end
+			end
+			
+			anims.death:AdjustSpeed(0.8)
+			anims.death:Play()
+			
+	
+			anims.death.Stopped:Connect(function()
+				task.wait(2)			
+				for player, damage in pairs(playerContributionList) do
+					
+					rs.StatRemoteEvents.XP:FireClient(player, boss:GetAttribute("XP"))
+					inventoryModule.UpdateInventory(player, "Gold", boss:GetAttribute("Gold"))
+					local islandID = string.sub(boss.Parent.Parent.Name, -1)
+					local batchID = string.sub(boss.Parent.Name, -1)
+					local quest = player.Quests:FindFirstChild("Island"..islandID)
+					if quest then
+						local batch = quest:FindFirstChild("Batch"..batchID)
+						if batch then
+							local progress = batch:FindFirstChild("Progress")
+							if progress then
+								progress.Value = progress.Value + 1
+							end
+						end
+					end
+				end
+				boss:Destroy()
+			end)
+		end
+	end
+end)
+
+
+
+
+local bossRoot = boss.PrimaryPart
+local closestPlayer = nil
+local Players = game:GetService("Players")
+local PathfindingService = game:GetService("PathfindingService")
+local wayPointPos = nil
+
+local path = PathfindingService:CreatePath({
+	AgentRadius = 8,
+	AgentHeight = 0.1,
+	AgentCanJump = true,
+	AgentJumpHeight = 7.2,
+	AgentMaxSlope = 45,
+})
+
+local waypoints = {}
+local waypointIndex = 1
+local skipWaypoint = false
+
+if not anims.spawn.IsPlaying then
+	anims.spawn:Play()
+	for _, part in pairs(boss:GetChildren()) do
+		if part:IsA("MeshPart") and part.Name ~= "RootPart" then
+			--local tween = tweenService:Create(part, TweenInfo.new(0.7), {Transparency = 0}):Play()
+			part.Transparency = 0
+		end
+	end
+	anims.spawn.Stopped:Connect(function()
+		boss:SetAttribute("State", "Idle")
+	end)
+end
+
+task.spawn(function()
+	while boss and hum and hum.Health > 0 do
+		--print(boss:GetAttribute("State"))
+		local closest = math.huge
+		for _, player in ipairs(Players:GetPlayers()) do	
+			if player and player.Character then
+				local playerHRP = player.Character.PrimaryPart
+				if playerHRP then
+					local distance = (playerHRP.Position - bossRoot.Position).Magnitude
+					if distance < closest then
+						closest = distance
+						closestPlayer = player
+					end
+				end
+			end
+		end
+		if closest < 30 and boss:GetAttribute("State") == "Dormant" and boss:GetAttribute("State") ~= "Dead" then
+			--[[
+			
+			]]
+		elseif closest < 20 and boss:GetAttribute("State") ~= "Attacking" and boss:GetAttribute("State") ~= "Dormant" and boss:GetAttribute("State") ~= "Dead" then
+			boss:SetAttribute("Hyperarmor", true)
+			boss:SetAttribute("State", "Attacking")
+			local choice = math.random(1, 3)
+			if choice < 3 then
+				anims.bite:Play()
+				anims.bite.Stopped:Connect(function()
+					boss:SetAttribute("State", "Idle")
+					boss:SetAttribute("Hyperarmor", false)
+				end)
+				task.delay(0.3, function()
+					local hitbox = rs.VFX.EnemyVFX.BiteHitbox:Clone()
+					local goal = (bossRoot.CFrame*CFrame.Angles(0, math.rad(-90), 0)).LookVector * -5
+					hitbox.CFrame = CFrame.lookAt(bossRoot.Position, bossRoot.Position + goal) * CFrame.new(0, -12, -7)
+					hitbox.Parent = game.Workspace
+					game:GetService("Debris"):AddItem(hitbox, 1)
+				
+					local vfx = rs.VFX.EnemyVFX.JawVFX2:Clone()
+					vfx.Position = bossRoot.Position + (bossRoot.CFrame*CFrame.Angles(0, math.rad(90), 0)).LookVector*8 + Vector3.new(0, -3.7, 0)
+					vfx.Parent = game.Workspace
+					game.Debris:AddItem(vfx, 2)
+					task.spawn(function()
+						task.wait(0.05)
+						for _, att in pairs(vfx:GetChildren()) do
+							for _, emitter in pairs(att:GetChildren()) do
+								emitter:Emit(1)
+							end
+						end
+					end)
+					
+					local hitboxParams = OverlapParams.new()
+					hitboxParams.FilterType = Enum.RaycastFilterType.Exclude
+					hitboxParams.FilterDescendantsInstances = {boss, hitbox}
+					local hits = workspace:GetPartBoundsInBox(hitbox.CFrame, hitbox.Size, hitboxParams)
+					local hitPlayers = {}
+					
+					for _, hit in hits do
+						local hum = hit.Parent:FindFirstChild("Humanoid")
+						if hum and not hitPlayers[hit.Parent] then
+							hitPlayers[hit.Parent] = true
+							hum:TakeDamage(10)
+							--modScript.stun(hit.Parent, 0.5)
+						end
+					end
+				end)
+			else
+				anims.slam:Play()
+				anims.slam.Stopped:Connect(function()
+					boss:SetAttribute("State", "Idle")
+				end)
+				task.delay(1, function()
+					local hitbox = rs.VFX.EnemyVFX.SlamHitbox:Clone()
+					hitbox.Position = bossRoot.Position + Vector3.new(0, -10, 0)
+					hitbox.Parent = game.Workspace
+					game:GetService("Debris"):AddItem(hitbox, 1)
+					
+					task.spawn(function()
+						task.wait(0.15)
+						for _, folder in pairs(hitbox:GetChildren()) do
+							for _, att in pairs(folder:GetChildren()) do
+								for _, emitter in pairs(att:GetChildren()) do
+									--print("Should Emit")
+									emitter:Emit(emitter:GetAttribute("EmitCount"))
+									
+								end
+							end
+						end
+					end)
+					
+					local hitboxParams = OverlapParams.new()
+					hitboxParams.FilterType = Enum.RaycastFilterType.Exclude
+					hitboxParams.FilterDescendantsInstances = {boss, hitbox}
+					local hits = workspace:GetPartBoundsInBox(hitbox.CFrame, hitbox.Size, hitboxParams)
+					local hitPlayers = {}
+
+					for _, hit in hits do
+						local hum = hit.Parent:FindFirstChild("Humanoid")
+						if hum and not hitPlayers[hit.Parent] then
+							hitPlayers[hit.Parent] = true
+							hum:TakeDamage(15)
+							modScript.stun(hit.Parent, 1)
+							ragdollModule:Ragdoll(hit.Parent, 1)
+						end
+					end
+				end)
+			end
+		elseif closest < 100 and boss:GetAttribute("State") ~= "Attacking" and boss:GetAttribute("State") ~= "Dormant" and boss:GetAttribute("State") ~= "Dead" then
+			boss:SetAttribute("State", "Moving")
+			
+			--[[
+			path:ComputeAsync(bossRoot.Position, closestPlayer.Character.PrimaryPart.Position)
+			waypoints = path:GetWaypoints()
+			waypointIndex = 1
+			for _, wp in waypoints do
+				local part = Instance.new("Part")
+				part.Anchored = true
+				part.Position = wp.Position
+				part.Color = Color3.new(1, 0, 0)
+				part.Material = Enum.Material.Neon
+				part.CanCollide = false
+				part.CanTouch = false
+				part.Parent = game.Workspace
+				game.Debris:AddItem(part, 0.1)
+			end
+			local waypoint = waypoints[waypointIndex]
+			if waypoint then
+				
+				if waypoint.Action == Enum.PathWaypointAction.Jump then
+					bossRoot.AssemblyLinearVelocity += Vector3.new(0, 45, 0)
+				end
+				
+				local wayPos = Vector3.new(waypoint.Position.X, bossRoot.Position.Y, waypoint.Position.Z)
+				wayPointPos = wayPos
+				
+				
+				if (wayPos - bossRoot.Position).Magnitude < 0.5 then
+					waypointIndex += 1
+				else
+					
+					print("moving to waypoint "..tostring(waypointIndex))
+					task.wait(1)
+				end
+			end
+			]]
+		elseif closest > 50 and boss:GetAttribute("State") ~= "Dormant" and boss:GetAttribute("State") ~= "Dead" then 
+			closest = math.huge
+			closestPlayer = nil
+			boss:SetAttribute("State", "Idle")
+		end
+		task.wait(0.1)
+		
+	end
+end)
+
+local RunService = game:GetService("RunService")
+
+local angularOffset = CFrame.Angles(0, math.rad(-90), 0)
+--[[]]
+RunService.Heartbeat:Connect(function(dt)	
+
+	if closestPlayer and boss:GetAttribute("State") ~= "Dormant" and boss:GetAttribute("State") ~= "Dead" then
+		local targetChar = closestPlayer.Character
+		if targetChar then
+			local target = targetChar.PrimaryPart
+			if target then
+				local pos = bossRoot.Position
+				local targetPos = Vector3.new(target.Position.X, pos.Y, target.Position.Z)
+
+				bossRoot.CFrame = bossRoot.CFrame:Lerp(
+					CFrame.lookAt(pos, targetPos)*CFrame.Angles(0, math.rad(-90), 0),
+					math.clamp(dt * 6, 0, 1)
+				)
+
+				if boss:GetAttribute("State") ~= "Attacking" and boss:GetAttribute("State") ~= "Idle" then
+					local toTarget = targetPos - pos
+					local distance = toTarget.Magnitude
+
+					if distance > 12.5 then
+						local moveDir = (bossRoot.CFrame*CFrame.Angles(0, math.rad(-90), 0)).LookVector*-1
+						bossRoot.CFrame += moveDir * 16 * dt
+					end
+				end
+
+			end
+		end
+	end
+end)
+
+
+
+	
