@@ -1,0 +1,92 @@
+local Players = game:GetService("Players")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+local rs = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+local main = player:WaitForChild("PlayerGui"):WaitForChild("Main")
+local questText = require(rs.QuestText)
+local islandNum = nil
+local batchNum = nil
+
+local questFrame = main.QuestQuestionFrame
+local titleLabel = questFrame.FrameBox.Title
+local infoLabel = questFrame.FrameBox.Info
+
+local typingSpeed = 0.01
+local continueTyping = true
+
+local questPrompt = function(prompt)
+	local npc = prompt:FindFirstAncestorOfClass("Model")
+	if not npc then return end
+
+	local batchFolder = npc:FindFirstAncestorOfClass("Folder")
+	if not batchFolder or not batchFolder.Parent then return end
+	
+	task.spawn(function()
+		prompt.Enabled = false
+		prompt.Parent.ProximityPromptGui.CanvasGroup.Visible = false
+		task.wait(1)
+		prompt.Enabled = true
+		prompt.Parent.ProximityPromptGui.CanvasGroup.Visible = true
+	end)
+	
+	
+	local islandFolder = batchFolder.Parent
+
+	batchNum = batchFolder.Name:sub(-1)
+	islandNum = islandFolder.Name:sub(-1)
+	questFrame.Visible = true	
+	titleLabel.Text= questText["Island"..tostring(islandNum)]["Batch"..tostring(batchNum)].Title
+
+	local fullText = questText["Island"..tostring(islandNum)]["Batch"..tostring(batchNum)].Info
+	local typingSpeed = 0.01 
+	infoLabel.Text = ""
+
+	for i = 1, #fullText do
+		if continueTyping == true then
+			infoLabel.Text = fullText:sub(1, i)
+			task.wait(typingSpeed)
+		else
+			infoLabel.Text = fullText
+			continueTyping = true
+			return
+		end
+	end
+end
+
+ProximityPromptService.PromptTriggered:Connect(function(prompt, triggeredPlayer)
+	if triggeredPlayer ~= player then return end
+
+	--questNPCs prompts
+	if prompt:IsDescendantOf(workspace:WaitForChild("QuestNPCS")) then
+		questPrompt(prompt)
+	elseif prompt.Name == "FishingRodPrompt" then
+		rs.StatRemoteEvents.UpdateInventory:FireServer("Fishing Rod", 1)
+	end
+
+	
+end)
+
+
+
+questFrame.SkipButton.MouseButton1Click:Connect(function()
+	continueTyping = false
+end)
+
+questFrame.Yes.MouseButton1Click:Connect(function()
+	questFrame.Visible = false
+	local island = player.Quests:FindFirstChild("Island"..tostring(islandNum))
+	local batch = island and island:FindFirstChild("Batch"..tostring(batchNum))
+	local progress = batch and batch:FindFirstChild("Progress")
+
+	if not island or not batch or not progress then
+		rs.StatRemoteEvents.AssignQuestEvent:FireServer(islandNum, batchNum)
+	end
+
+end)
+
+questFrame.No.MouseButton1Click:Connect(function()
+	questFrame.Visible = false
+	islandNum = nil
+	batchNum = nil
+end)
