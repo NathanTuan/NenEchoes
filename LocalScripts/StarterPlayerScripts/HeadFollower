@@ -1,0 +1,25 @@
+local player = game:GetService("Players").LocalPlayer
+local runService =  game:GetService("RunService")
+local summonsFolder = game.Workspace.Summons
+task.wait(2)
+
+local function positionPets(character, folder)
+	if not folder then return end
+	for i, head in pairs(folder:GetChildren()) do
+		
+		local prime = head.PrimaryPart
+		local primeCFrame = prime.CFrame:Lerp(character.HumanoidRootPart.CFrame * CFrame.new(3, 3, 3), 0.1)
+		head:PivotTo(primeCFrame)
+		
+	end
+end
+
+local oldTime = tick()
+runService.Stepped:Connect(function()
+	local newTick = tick()
+	
+		positionPets(player.Character, summonsFolder[player.Name])
+	
+	
+
+end)
