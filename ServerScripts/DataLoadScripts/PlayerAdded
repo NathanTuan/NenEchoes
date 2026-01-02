@@ -1,0 +1,272 @@
+local players = game:GetService("Players")
+local dataStore = game:GetService("DataStoreService")
+local playerDataStore = dataStore:GetDataStore("PlayerData")
+local rs = game:GetService("ReplicatedStorage")
+local ss = game:GetService("ServerStorage")
+local cdManager = require(game.ReplicatedStorage.CooldownManager)
+local movementManager = require(game.ServerScriptService.GeneralPlayerScripts.Movement.movementAnimsModule)
+
+local collectionService = game:GetService("CollectionService")
+
+local PhysicsService = game:GetService("PhysicsService")
+local Players = game:GetService("Players")
+
+local CollisionGroupName = "TempNoCollide"
+PhysicsService:RegisterCollisionGroup(CollisionGroupName)
+--PhysicsService:RegisterCollisionGroup("Ocean")
+PhysicsService:CollisionGroupSetCollidable(CollisionGroupName, CollisionGroupName, false)
+--PhysicsService:CollisionGroupSetCollidable(CollisionGroupName, "Ocean", false)
+
+
+local function setCollisionGroup(model)
+	for _, descendant in model:GetDescendants() do
+		if descendant:IsA("BasePart") or descendant:IsA("MeshPart") then
+			descendant.CollisionGroup = CollisionGroupName
+		end
+	end
+end
+
+
+
+
+
+for _, obj in ipairs(collectionService:GetTagged("Dummy")) do
+	obj:SetAttribute("Stunned", false)
+	obj:SetAttribute("StunnedTime", 0)
+	obj:SetAttribute("Blocking", true)
+	obj:SetAttribute("Speed", 0)
+	obj:SetAttribute("RagdollTime", 0)
+	obj:SetAttribute("SpeedBuff", 0)
+end
+
+local gameStartTable = {}
+local hairArray = ss.Outfits.Hairs:GetChildren()
+local shirtArray = ss.Outfits.Shirts:GetChildren()
+local sleevesArray = ss.Outfits.Sleeves:GetChildren()
+local pantsArray = ss.Outfits.Pants:GetChildren()
+local shoesArray = ss.Outfits.Shoes:GetChildren()
+local eyesArray  = ss.Outfits.Eyes:GetChildren()
+local nosesArray = ss.Outfits.Noses:GetChildren()
+local mouthsArray = ss.Outfits.Mouths:GetChildren()
+function updateClothes(player)	
+	for _, v in pairs(player.Character:WaitForChild("Clothes"):GetChildren()) do
+		--print(v.Name)
+		v:Destroy()
+	end
+	for _, v in pairs(player.Character:WaitForChild("Head"):GetChildren()) do
+		if v:IsA("Decal") then
+			v:Destroy()
+		end
+	end
+	local hairID = player:WaitForChild("ClothesIDs"):WaitForChild("HairNum").Value
+	local shirtID = player:WaitForChild("ClothesIDs"):WaitForChild("ShirtNum").Value
+	local sleevesID = player:WaitForChild("ClothesIDs"):WaitForChild("SleevesNum").Value
+	local pantsID = player:WaitForChild("ClothesIDs"):WaitForChild("PantsNum").Value
+	local shoesID = player:WaitForChild("ClothesIDs"):WaitForChild("ShoesNum").Value
+	local eyesID = player:WaitForChild("ClothesIDs"):WaitForChild("EyesNum").Value
+	local noseID = player:WaitForChild("ClothesIDs"):WaitForChild("NoseNum").Value
+	local mouthID = player:WaitForChild("ClothesIDs"):WaitForChild("MouthNum").Value
+
+	local outfitFolderHair = hairArray[hairID]
+	local outfitFolderTop =	shirtArray[shirtID]
+	local outfitFolderMid = sleevesArray[sleevesID]
+	local outfitFolderBottom = pantsArray[pantsID]
+	local outfitFolderShoes = shoesArray[shoesID]
+	--[[
+	print("Shirt: "..tostring(shirtID))
+	print("Sleeves: "..tostring(sleevesID))
+	print("Pants: "..tostring(pantsID))
+]]
+	local eyeTexture = eyesArray[eyesID]:Clone() or eyesArray[1]:Clone()
+	eyeTexture.Parent = player.Character.Head 
+	local noseTexture = nosesArray[noseID]:Clone() or nosesArray[1]:Clone()
+	noseTexture.Parent = player.Character.Head
+	local mouthTexture = mouthsArray[mouthID]:Clone() or mouthsArray[1]:Clone()
+	mouthTexture.Parent = player.Character.Head
+
+	for _, bodyPart in pairs(player.Character:GetChildren()) do
+		local clothingMesh
+		if (bodyPart.Name == "Torso") then
+			clothingMesh = outfitFolderTop:FindFirstChild(bodyPart.Name)
+
+		elseif (bodyPart.Name == "Left Leg" or bodyPart.Name == "Right Leg") then
+			clothingMesh = outfitFolderBottom:FindFirstChild(bodyPart.Name)
+
+		elseif (bodyPart.Name == "Left Arm" or bodyPart.Name == "Right Arm") then
+			clothingMesh = outfitFolderMid:FindFirstChild(bodyPart.Name)
+		elseif (bodyPart.Name == "Head") then
+			clothingMesh = outfitFolderHair:FindFirstChild(bodyPart.Name)
+		end
+
+		if clothingMesh then
+			local part = clothingMesh:Clone()
+			part.Anchored = false
+			part.CanCollide = false
+			part.Parent = player.Character.Clothes
+			part:PivotTo(bodyPart.CFrame * CFrame.Angles(0, math.rad(180), 0))
+			part.WeldConstraint.Part0 = bodyPart
+		end
+
+	end
+	local leftShoesMesh
+	leftShoesMesh = outfitFolderShoes:FindFirstChild("Left Shoe")
+	if leftShoesMesh then
+		local part = leftShoesMesh:Clone()
+		part.Anchored = false
+		part.CanCollide = false
+		part.Parent = player.Character.Clothes
+		part:PivotTo(player.Character["Left Leg"].CFrame * CFrame.Angles(0, math.rad(180), 0))
+		part.WeldConstraint.Part0 = player.Character["Left Leg"]
+	end
+	local rightShoesMesh
+	rightShoesMesh = outfitFolderShoes:FindFirstChild("Right Shoe")
+	if rightShoesMesh then
+		local part = rightShoesMesh:Clone()
+		part.Anchored = false
+		part.CanCollide = false
+		part.Parent = player.Character.Clothes
+		part:PivotTo(player.Character["Right Leg"].CFrame * CFrame.Angles(0, math.rad(180), 0))
+		part.WeldConstraint.Part0 = player.Character["Right Leg"]
+	end
+
+end
+
+
+players.PlayerAdded:Connect(function(player)
+	
+	local folder = Instance.new("Folder")
+	folder.Name = player.Name
+	folder.Parent = game.Workspace.Summons
+	
+	cdManager.InitPlayer(player)
+	
+	player.CharacterAdded:Connect(function(character)
+		
+		character:SetAttribute("Nen", 100)
+		character:SetAttribute("Speed", 16)
+		character:SetAttribute("Stunned", false)
+		character:SetAttribute("StunnedTime", 0)
+		character:SetAttribute("Combo", 1)
+		character:SetAttribute("Cooldown", false)
+		character:SetAttribute("Sprinting", false)
+		character:SetAttribute("NetDirection", "")
+		character:SetAttribute("TotalDamage", 0)
+		character:SetAttribute("MeterWaitTime", 0)
+		character:SetAttribute("Blocking", false)
+		character:SetAttribute("Attacking", false)
+		character:SetAttribute("AttackingTime", 0)
+		character:SetAttribute("WeaponOut", false)
+		character:SetAttribute("Weapon", "")
+		character:SetAttribute("M1Activated", false)
+		character:SetAttribute("Dashing", false)
+		character:SetAttribute("Ragdolled", false)
+		character:SetAttribute("NenAbility", "Killua")
+		character:SetAttribute("AbilityEnabled", false)
+		character:SetAttribute("SpeedBuff", 0)
+		character:SetAttribute("RagdollTime", 0)
+		character:SetAttribute("GodSpeed", false)
+		character:SetAttribute("StartUp", false)
+		character:SetAttribute("Busy", false)
+		character:SetAttribute("Parrying", false)
+		character:SetAttribute("Hyperarmor", false)
+		character:SetAttribute("Charging", false)
+		character:SetAttribute("HeadOut", false)
+		character:SetAttribute("Airtilting", -1)
+		character:SetAttribute("Driving", false)
+		
+		
+		local clothesFolder = Instance.new("Folder")
+		clothesFolder.Name = "Clothes"
+		clothesFolder.Parent = player.Character
+		
+		local att = Instance.new("Attachment")
+		att.Parent = character.PrimaryPart
+		att.Name = "dashAtt"
+		
+		
+		
+		if game.Workspace.Summons[player.Name] then
+			for _, v in pairs(game.Workspace.Summons[player.Name]:GetChildren()) do
+				v:Destroy()
+			end
+		end	
+		
+		local attempts, maxAttempts = 1, 4
+		while attempts < maxAttempts and not gameStartTable[player] do
+			--print("Trying")
+			attempts = attempts + 1
+			task.wait(1*attempts)
+		end
+		
+		for _, descendant in character:GetDescendants() do
+			if descendant:IsA("BasePart") then
+				descendant.CollisionGroup = "TempNoCollide"
+			end
+		end
+	
+
+		if gameStartTable[player] then
+			updateClothes(player)
+
+			local hum = character:WaitForChild("Humanoid")
+			task.wait(1)
+			hum.MaxHealth = 100 + player.Stats.Health.Value
+			hum.Health = hum.MaxHealth
+			character:SetAttribute("Nen", 100+player.Stats.Nen.Value)	
+			rs.StatRemoteEvents.CharacterAddedEvent:FireClient(player)
+		end
+		
+	end)
+
+
+end)
+
+
+
+game.Players.PlayerRemoving:Connect(function(player)
+	
+	local playerFolder = game.Workspace:FindFirstChild(player.Name.."Folder")
+	if not playerFolder then return end
+	playerFolder:Destroy()
+	
+	cdManager.RemovePlayer(player)
+end)
+
+--rs:WaitForChild("StatRemoteEvents"):WaitForChild("ClientLoadEvent").OnServerEvent:Connect(function(player)
+	
+
+
+rs.StatRemoteEvents.ClientLoadEvent.OnServerEvent:Connect(function(player)
+	print("Loaded")
+	gameStartTable[player] = true
+end)
+--[[
+local outfitFolderTop = rs.Outfits["Outfit"..tostring(player.Clothes.ShirtNum.Value).."View"]
+		local outfitFolderBottom = rs.Outfits["Outfit"..tostring(player.Clothes.PantsNum.Value).."View"]
+
+		for _, bodyPart in pairs(character:GetChildren()) do
+			if (bodyPart.Name == "Torso" or bodyPart.Name == "Left Arm" or bodyPart.Name == "Right Arm" 
+					or bodyPart.Name == "Head") then
+
+				local clothingMesh = outfitFolderTop:FindFirstChild(bodyPart.Name)
+				if clothingMesh then
+					local part = clothingMesh:Clone()
+					part.Anchored = false
+					part.CanCollide = false
+					part.Parent = character.Clothes
+					part:PivotTo(bodyPart.CFrame * CFrame.Angles(0, math.rad(180), 0))
+					part.WeldConstraint.Part0 = bodyPart
+				end
+			elseif (bodyPart.Name == "Left Leg" or bodyPart.Name == "Right Leg") then
+				local clothingMesh = outfitFolderBottom:FindFirstChild(bodyPart.Name)
+				if clothingMesh then
+					local part = clothingMesh:Clone()
+					part.Anchored = false
+					part.CanCollide = false
+					part.Parent = character.Clothes
+					part:PivotTo(bodyPart.CFrame * CFrame.Angles(0, math.rad(180), 0))
+					part.WeldConstraint.Part0 = bodyPart
+				end
+			end
+		end
+]]
