@@ -1,0 +1,69 @@
+local rs = game:GetService("ReplicatedStorage")
+local modScript = require(game:GetService("ServerScriptService").ModuleScript)
+local nenAnimsManager = require(game.ServerScriptService.NenAbilities.NenAbilityAnimationManager)
+
+rs.RemoteEvents.NenAbilities.StartChargeNenEvent.OnServerEvent:Connect(function(player, bool)
+	local checks = modScript.checkAll(player)
+	if checks == false or player.Character:GetAttribute("Busy") == true then return end
+	
+	local anims = nenAnimsManager:GetAnimations(player.Character)
+	anims.chargeNenClip:Play()
+	
+	modScript.yieldAllBut(player.Character, "ChargeNenAnim")
+	player.Character:SetAttribute("Charging", true)
+	player.Character:SetAttribute("Busy", true)
+	player.Character.Humanoid.WalkSpeed = 0
+	player.Character.Humanoid.JumpHeight = 0
+	
+	for _, v in pairs(player.Character:GetChildren()) do
+		if v.Name == "Right Arm" or v.Name == "Left Arm" or v.Name == "Torso" or v.Name == "Right Leg" or v.Name == "Left Leg" then
+			for _, emitter in pairs(rs.VFX.NenVFX.HXH.victimv3[v.Name]:GetChildren()) do
+				local vfx = emitter:Clone()
+				vfx.Parent = v
+				vfx.Name = "NenAuraToDelete"
+			end
+			
+		elseif v.Name == "Head" then
+			local vfx = rs.VFX.NenVFX.HXH.victimv3["Head"].Part:Clone()
+			vfx.Parent = v
+			vfx.Name = "NenAuraToDelete"
+		end
+	end
+end)
+
+rs.RemoteEvents.NenAbilities.ChargeNenEvent.OnServerEvent:Connect(function(player, bool)
+	if player.Character:GetAttribute("Stunned") == true or player.Character:GetAttribute("Charging") == false then
+		bool = false
+	end
+	
+	if bool==true then
+		local maxNen = 100+player.Stats.Nen.Value
+		local nenIncrement = math.floor((maxNen/50) * 10 + 0.5) / 10
+		if player.Character:GetAttribute("Nen") + 2 < (maxNen) then
+			player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")+nenIncrement)
+		else
+			player.Character:SetAttribute("Nen", maxNen)
+		end
+		rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, 1)
+	else
+	
+		player.Character:SetAttribute("Busy", false)
+		player.Character:SetAttribute("Charging", false)
+		player.Character.Humanoid.WalkSpeed = player.Character:GetAttribute("Speed") + player.Character:GetAttribute("SpeedBuff")
+		player.Character.Humanoid.JumpHeight = 7.2
+		
+		for _, stuff in pairs(player.Character:GetDescendants()) do
+			if stuff.Name == "NenAuraToDelete" then
+				stuff:Destroy()
+			end
+		end
+		
+		local anims = nenAnimsManager:GetAnimations(player.Character)
+		anims.chargeNenClip:Stop()
+	end
+end)
+
+
+rs.RemoteEvents.NenAbilities.ChangeHatsuEvent.OnServerEvent:Connect(function(player, hatsu)
+	player.Character:SetAttribute("NenAbility", hatsu)
+end)
