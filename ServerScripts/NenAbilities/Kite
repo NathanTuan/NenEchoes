@@ -1,0 +1,891 @@
+local rs = game:GetService("ReplicatedStorage")
+local tweenService = game:GetService("TweenService")
+local tweenInfo = TweenInfo.new(1, Enum.EasingStyle.Quad)
+local tweenInfo2 = TweenInfo.new(0.8, Enum.EasingStyle.Quad)
+local runService = game:GetService("RunService")
+local pathFindingService=  game:GetService("PathfindingService")
+local circle = math.pi * 2
+local minRadius = 4
+local modScript = require(game.ServerScriptService.ModuleScript)
+local cdManager = require(game.ReplicatedStorage.CooldownManager)
+local cdScript = require(game.ReplicatedStorage.Cooldowns)
+--moves
+local headSummon = rs.RemoteEvents.NenAbilities.KiteMoves.SummonHead
+local spinEvent = rs.RemoteEvents.NenAbilities.KiteMoves.SpinEvent
+local barrageEvent = rs.RemoteEvents.NenAbilities.KiteMoves.SpawnedGun.X
+local UICDEvent = rs.RemoteEvents.UIEvents.UICDEvent
+local KiteTweenEvent =rs.RemoteEvents.UIEvents.KiteUI.KiteTweenEvent
+--anims
+local animManager = require(game.ServerScriptService.NenAbilities.NenAbilityAnimationManager)
+local ragdollModule = require(game.ServerScriptService.ragdollModule)
+
+
+local function createEffect(position, hitEffectt, player, bool)
+
+	local hitEffectSpawn = hitEffectt:Clone()
+	hitEffectSpawn.Parent = workspace
+	hitEffectSpawn.Position = position
+
+	local attachment = hitEffectSpawn.Attachment
+	if bool == true then
+		local motor6D = Instance.new("Motor6D")
+		motor6D.Parent = hitEffectSpawn
+		motor6D.Part0 = hitEffectSpawn
+		motor6D.Part1 = player.Character:WaitForChild("SpawnedGun").WeaponBody.Barrel
+		hitEffectSpawn.Attachment.ParticleEmitter.Rotation = NumberRange.new(-180, 180)
+	end
+	
+
+	game:GetService("Debris"):AddItem(hitEffectSpawn, 0.5)
+	task.wait(0.1)
+	for i, v in pairs(hitEffectSpawn.Attachment:GetChildren()) do
+		if v:IsA("ParticleEmitter") then
+			v:Emit(v:GetAttribute("EmitCount"))
+		end
+	end
+end
+
+local function showBubble(player, message, luck)
+	local character = player.Character
+	if not character then return end
+
+	local head = character:FindFirstChild("Head")
+	if not head then return end
+
+	local bubble = Instance.new("BillboardGui")
+	bubble.Size = UDim2.new(0, 150, 0, 37.5)
+	bubble.Adornee = head
+	bubble.AlwaysOnTop = true
+	bubble.Name = "ChatBubble"
+	bubble.StudsOffset = Vector3.new(0, 2.5, 0)
+
+	local textLabel = Instance.new("TextLabel")
+	textLabel.Size = UDim2.new(1, 0, 1, 0)
+	textLabel.BackgroundTransparency = 1
+	textLabel.TextScaled = true
+	textLabel.FontFace = Font.new("rbxasset://fonts/families/PressStart2P.json")
+	textLabel.Text = message
+	textLabel.TextColor3 = Color3.new(1, 1, 1)
+	textLabel.Parent = bubble
+
+	bubble.Parent = head
+	if luck == "bad" then
+		task.spawn(function()
+			for i = 1, 2 do
+				wait(0.1)
+				textLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+				wait(0.1)
+				textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+				wait(0.1)
+				textLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+				wait(0.1)
+				textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+				wait(0.1)
+				textLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+				wait(0.1)
+				textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+				wait(0.1)
+				textLabel.TextColor3 = Color3.fromRGB(255, 0, 0)
+				wait(0.1)
+				textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+				wait(0.1)
+			end
+		end)
+	
+	else 
+		task.spawn(function()
+			for i = 1, 2 do
+				wait(0.1)
+				textLabel.TextColor3 = Color3.fromRGB(100, 255, 57)
+				wait(0.1)
+				textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+				wait(0.1)
+				textLabel.TextColor3 = Color3.fromRGB(100, 255, 57)
+				wait(0.1)
+				textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+				wait(0.1)
+				textLabel.TextColor3 = Color3.fromRGB(100, 255, 57)
+				wait(0.1)
+				textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+				wait(0.1)
+				textLabel.TextColor3 = Color3.fromRGB(100, 255, 57)
+				wait(0.1)
+				textLabel.TextColor3 = Color3.fromRGB(255, 255, 255)
+				wait(0.1)
+			end
+		end)
+	end
+	game:GetService("Debris"):AddItem(bubble, 2)
+end
+
+
+headSummon.OnServerEvent:Connect(function(player)
+	local checks = modScript.checkAll(player)
+	if checks == false then return end
+	
+	if player.Character:GetAttribute("HeadOut") == false then
+		player.Character:SetAttribute("M1Activated", false)
+		player.Character:SetAttribute("HeadOut", true)
+		
+		--KiteTweenEvent:FireClient(player, "Active")
+		local head = game.ReplicatedStorage.NenAbilities.Kite.FaceThing:Clone()
+		head.Parent = game.Workspace:FindFirstChild("Summons"):FindFirstChild(player.Name)
+		head.PrimaryPart.CFrame = player.Character.PrimaryPart.CFrame
+		createEffect(player.Character.PrimaryPart.Position, game.ReplicatedStorage:WaitForChild("VFX").KiteVFX.hitEffectRainbow, player, false)
+		createEffect(player.Character.PrimaryPart.Position, rs.VFX.KiteVFX.CloudSmoke, player, false)
+	else
+		player.Character:SetAttribute("HeadOut", false)
+		
+		--KiteTweenEvent:FireClient(player, "Inactive")
+		for _, v in pairs(game.Workspace.Summons:FindFirstChild(player.Name):GetChildren()) do
+			if v:IsA("Model") then
+				createEffect(player.Character.PrimaryPart.Position, game.ReplicatedStorage:WaitForChild("VFX").KiteVFX.hitEffectRainbow, player, false)
+				createEffect(player.Character.PrimaryPart.Position, rs.VFX.KiteVFX.CloudSmoke, player, false)
+				v:Destroy(0.5)
+			end
+		end
+		if player.Character:GetAttribute("WeaponOut") == true then
+			local weapon = player.Character:FindFirstChild(player.Character:GetAttribute("Weapon"))
+			weapon:Destroy()
+			player.Character:SetAttribute("WeaponOut", false)
+			player.Character:SetAttribute("Weapon", "")
+		end
+		
+	end	
+end)
+
+spinEvent.OnServerEvent:Connect(function(player)
+	
+	local checks = modScript.checkAll(player)
+	if checks == false or player.Character:GetAttribute("Nen") < cdScript.Kite.SpawnedScythe.Z.Cost then return end
+	
+	if cdManager.IsOnCooldown(player, "Z") then
+		return
+	else
+		cdManager.SetCooldown(player, "Z", cdScript.Kite.SpawnedGun.Z.Cooldown)
+		UICDEvent:FireClient(player, "Z", cdScript.Kite.SpawnedGun.Z.Cooldown)
+		player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")-cdScript.Kite.SpawnedScythe.Z.Cost)
+		rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, cdScript.Kite.SpawnedScythe.Z.Cost)
+	end
+	
+	local choice = 0
+	if player.Character:GetAttribute("Weapon") == "" then
+		choice = math.random(1, 2)
+	else
+		if player.Character:GetAttribute("Weapon") == "SpawnedScythe" then
+			choice = 2
+		else
+			choice = 1
+		end
+	end
+
+	createEffect(player.Character.PrimaryPart.Position, game.ReplicatedStorage:WaitForChild("VFX").KiteVFX.hitEffectRainbow, player, false)
+	createEffect(player.Character.PrimaryPart.Position, rs.VFX.KiteVFX.CloudSmoke, player, false)
+	player.Character:SetAttribute("HeadOut", true)
+	for _, v in pairs(game.Workspace.Summons:FindFirstChild(player.Name):GetChildren()) do
+		if v:IsA("Model") then
+			v:Destroy(0.5)
+		end
+	end
+	
+	if player.Character:GetAttribute("WeaponOut") == true then
+		local weapon = player.Character:FindFirstChild(player.Character:GetAttribute("Weapon"))
+		weapon:Destroy()
+	end
+	
+	player.Character:SetAttribute("WeaponOut", true)
+	player.Character:SetAttribute("M1Activated", false)
+
+
+
+	
+	if choice == 1 then
+		
+		player.Character:SetAttribute("Weapon", "SpawnedScythe")
+		local clonedScythe = game.ReplicatedStorage.NenAbilities.Kite.Scythe:Clone()
+		clonedScythe.Name = "SpawnedScythe"
+		clonedScythe.Parent = player.Character
+		local handle = clonedScythe.Handle
+		
+		local rightArm = player.Character:FindFirstChild("Right Arm")
+		local motor6D = Instance.new("Motor6D")
+		motor6D.Part0 = rightArm
+		motor6D.Part1 = handle
+		motor6D.Parent = handle
+		motor6D.C0 = CFrame.new(0, -1.20000005, -0.5, 1, 0, 0, 0, 0.98480773, -0.173648193, 0, 0.173648193, 0.98480773)
+		
+		showBubble(player, "Good Roll", "good")
+		
+
+			--rbxassetid://74817492228109
+		rs.RemoteEvents.UIEvents.KiteUI.WeaponTweenEvent:FireClient(player)
+	elseif choice == 2 then
+		
+		player.Character:SetAttribute("Weapon", "SpawnedGun")
+		local gun = game.ReplicatedStorage.NenAbilities.Kite.Gun:Clone()
+		gun.Name = "SpawnedGun"
+		gun.Parent = player.Character
+		local handle = gun.Handle
+		
+		local rightArm = player.Character:FindFirstChild("Right Arm")
+		local motor6D = Instance.new("Motor6D")
+		motor6D.Part0 = rightArm
+		motor6D.Part1 = handle
+		motor6D.Parent = handle
+		
+		motor6D.C1 = CFrame.new(0, 1, 0) * CFrame.Angles(0, 350, 0)
+		showBubble(player, "Bad Roll", "bad")
+		rs.RemoteEvents.UIEvents.KiteUI.WeaponTweenEvent:FireClient(player)
+		
+	else 
+	
+		player.Character:SetAttribute("Weapon", "SpawnedStaff")
+		local staff = Instance.new("Part")
+		staff.Parent = player.Character
+		staff.Name = "SpawnedStaff"
+	end
+	KiteTweenEvent:FireClient(player)
+	local weapon = player.Character:FindFirstChild(player.Character:GetAttribute("Weapon"))
+	for _, v in pairs(weapon:GetChildren()) do
+		if v:IsA("Model") then
+			task.spawn(function()
+				for _, j in pairs(v:GetChildren()) do
+					if j:IsA("MeshPart") then
+						local tween = tweenService:Create(j, tweenInfo, {Transparency = 0})
+						tween:Play()
+						
+						task.wait(0.2)
+					end
+				end
+			end)
+			
+		end
+	end
+	rs.RemoteEvents.MovementEvents.MoveEndEvent:FireClient(player)
+end)
+
+
+
+
+local fireEvent = game.ReplicatedStorage.RemoteEvents.NenAbilities.KiteMoves.SpawnedGun.FireGun
+local meterEvent = game:GetService("ReplicatedStorage").RemoteEvents.UIEvents.MeterEvent
+
+
+fireEvent.OnServerEvent:Connect(function(player, target)
+	if player.Character:GetAttribute("Stunned") == true or player.Character:GetAttribute("Cooldown") == true or player.Character:GetAttribute("Blocking") == true or player.Character:GetAttribute("Charging") == true then return end
+	--print(player.Character:GetAttribute("Combo"))
+	player.Character:SetAttribute("Cooldown", true)
+	modScript.applyAttackingState(player.Character, 1)
+	player.Character:SetAttribute("Sprinting", false)
+	local anims = animManager:GetAnimations(player.Character)
+	anims.barragePoseClip:Play(0.05)
+	task.delay(0.5, function()
+		anims.barragePoseClip:Stop()
+	end)
+
+	player.Character:SetAttribute("Speed", 4)
+	local originalJumpHeight = player.Character.Humanoid.JumpHeight
+	player.Character.Humanoid.JumpPower = 0
+
+	
+	
+	local hrp = player.Character.PrimaryPart
+	local hrpPos = hrp.Position
+	local direction = (target-hrpPos).Unit*20
+	local vectorGoal = direction + hrpPos
+
+	local barrel = player.Character:WaitForChild("SpawnedGun").WeaponBody.Barrel
+	
+	local bool = modScript.checkInterruption(player.Character, 0.2)
+	task.spawn(function()
+		if player.Character:GetAttribute("Combo") < 5  then
+			task.wait(0.3)
+			player.Character:SetAttribute("Cooldown", false)
+		else	
+			task.wait(2)
+			if player.Character then 
+				player.Character:SetAttribute("Cooldown", false)
+			end
+
+		end
+	end)
+	
+	
+	if bool then
+		createEffect(player.Character:WaitForChild("SpawnedGun").WeaponBody.Barrel.Position, rs.VFX.KiteVFX.gunCrack, player, true)
+		local beam = rs.NenAbilities.Kite.BeamHolder:Clone()
+		beam.Beam.Attachment0 = barrel.att1
+		game:GetService("Debris"):AddItem(beam, 0.1)
+		
+		--[[]]
+		local hitbox = rs.VFX.Hitboxes.KiteHitboxes.KiteGunHitbox:Clone()
+		hitbox.CFrame = CFrame.lookAt(hrp.Position, vectorGoal) * CFrame.new(0, 0, -14)
+		hitbox.Parent = game.Workspace
+		hitbox.Name = "CMoveBox"
+		game:GetService("Debris"):AddItem(hitbox, 0.1)
+		
+		local hitboxParams = OverlapParams.new()
+		hitboxParams.FilterType = Enum.RaycastFilterType.Exclude
+		hitboxParams.FilterDescendantsInstances = {player.Character, hitbox}
+		local hits = workspace:GetPartBoundsInBox(hitbox.CFrame, hitbox.Size, hitboxParams)
+		local hitPlayers = {}
+		local hitSomeone = false
+		
+		for _, hit in hits do
+			local hum = hit.Parent:FindFirstChild("Humanoid")
+			if hum and not hitPlayers[hit.Parent] then
+				hitPlayers[hit.Parent] = true
+				
+				beam.Position = hit.Position
+				beam.Parent = game.Workspace
+				
+				
+				
+				hitSomeone = true
+				local damage = 5
+				if player.Character:GetAttribute("Combo") == 5 then
+					damage = 8
+					modScript.knockback(player.Character, hit.Parent, 40)
+					ragdollModule:Ragdoll(hit.Parent, 1.5)
+					modScript.stun(hit.Parent, 1.5)
+
+				else
+					modScript.knockback(player.Character, hum.Parent, 5)
+					modScript.stun(hit.Parent, 0.8)
+				end
+				hum:TakeDamage(damage)
+				modScript.damageLooks(player, hit, damage)
+				rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, damage)
+				createEffect(hum.Parent.PrimaryPart.Position, rs.VFX.CombatVFX.RedFX, false)
+				local clip = hum.Animator:LoadAnimation(rs.HurtAnims["hurtAnim (1)"])
+				clip:Play()
+			end
+		end
+		
+		task.spawn(function()
+			if not hitSomeone then
+				local raycastParams = RaycastParams.new()
+				raycastParams.FilterDescendantsInstances = {player.Character, hitbox}
+				raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+
+				local secondcast = workspace:Raycast(hrpPos, direction, raycastParams)
+				if secondcast and secondcast.Instance then
+					beam.Position = secondcast.Position
+					beam.Parent = game.Workspace
+					
+					local debris = rs.VFX.testDebris:Clone()
+					debris.Parent = player.Character
+					debris.Attachment.Dust.Color = ColorSequence.new(secondcast.Instance.Color)
+					debris.Position = target
+					task.wait(0.01)
+					debris.Attachment.Dust:Emit(5)
+					debris.Attachment.Crescents.Color = ColorSequence.new(secondcast.Instance.Color)
+					debris.Attachment.Crescents:Emit(6)
+					game:GetService("Debris"):AddItem(debris, 1)
+				end
+			end
+		end)
+	end
+	
+	if player.Character:GetAttribute("Combo") == 5 then
+		player.Character:SetAttribute("Combo", 1)
+	else
+		player.Character:SetAttribute("Combo", player.Character:GetAttribute("Combo")+1)
+	end
+
+	task.spawn(function()
+		local prev = player.Character:GetAttribute("Combo")
+		task.wait(2)
+		
+		if player.Character then 
+			if prev == player.Character:GetAttribute("Combo") then
+				player.Character:SetAttribute("Combo", 1)
+				player.Character.Humanoid.JumpPower = 50
+			end
+		end 
+		
+	end)
+
+end)
+
+
+barrageEvent.OnServerEvent:Connect(function(player, target)
+	
+	local checks = modScript.checkAll(player)
+	if checks == false or player.Character:GetAttribute("Nen") < cdScript.Kite.SpawnedGun.X.Cost then return end
+	
+	if cdManager.IsOnCooldown(player, "X") then
+		--print("On CD")
+		return
+	else
+		cdManager.SetCooldown(player, "X", cdScript.Kite.SpawnedGun.X.Cooldown)
+		UICDEvent:FireClient(player, "X", cdScript.Kite.SpawnedGun.X.Cooldown)
+		player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")-cdScript.Kite.SpawnedGun.X.Cost)
+		rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, cdScript.Kite.SpawnedGun.X.Cost)
+	end
+	
+	local anims = animManager:GetAnimations(player.Character)
+	
+	local hrp = player.Character.PrimaryPart
+	--modScript.stun(player.Character, 2.5)
+	player.Character:SetAttribute("Busy", true)
+	player.Character.Humanoid.WalkSpeed = 0
+	local direction = (Vector3.new(target.X, hrp.Position.Y, target.Z)-hrp.Position).Unit
+	local vectorGoal = hrp.Position + (direction*27)
+	
+	local animator = player.Character.Humanoid.Animator
+	hrp.CFrame = CFrame.lookAt(hrp.Position, vectorGoal)
+	anims.barragePoseClip:Play(0.25)
+	modScript.knockback(player.Character, player.Character, -5)
+
+	task.spawn(function()
+		--task.wait(anims.barrageClip.Length-0.1)
+		local barrel = player.Character.SpawnedGun.WeaponBody.Barrel
+		local hitPlayers = {}
+		
+		local duration = true
+		task.spawn(function()
+			task.wait(2)
+			duration = false
+			player.Character:SetAttribute("Busy", false)
+			player.Character.Humanoid.WalkSpeed = player.Character:GetAttribute("Speed")
+			anims.barragePoseClip:Stop()
+		end)
+		
+		
+		
+		task.wait(0.5)
+		
+		local vfx = rs.VFX.KiteVFX.bulletRects:Clone()
+		local motor6D = Instance.new("Motor6D")
+		motor6D.Parent = player.Character.PrimaryPart
+		motor6D.Part0 = player.Character.PrimaryPart
+		motor6D.Part1 = vfx
+		motor6D.C0 = motor6D.C0 * CFrame.new(0.7, 1, -2.5)
+		vfx.CFrame = CFrame.lookAt(barrel.Position+Vector3.new(0, 1, 0), Vector3.new(vectorGoal.X, barrel.Position.Y, vectorGoal.Z)) * CFrame.Angles(0, 0, math.rad(90))
+		vfx.Parent = game.Workspace
+		game:GetService("Debris"):AddItem(vfx, 2)
+		
+		local hitbox = rs.VFX.bruhBox:Clone()
+		local motor6D2 = Instance.new("Motor6D")
+		motor6D2.Parent = player.Character.PrimaryPart
+		motor6D2.Part0 = player.Character.PrimaryPart
+		motor6D2.Part1 = hitbox
+		motor6D2.C0 = motor6D2.C0 * CFrame.new(0.7, 1, -10)
+		hitbox.CFrame = CFrame.lookAt(barrel.Position, vectorGoal) * CFrame.new(0, 0, -14)
+		hitbox.Parent = game.Workspace
+		
+		
+		while duration == true do
+			--vectorGoal = barrel.Position + hrp.CFrame.LookVector
+			
+			
+			local params = OverlapParams.new()
+			params.FilterType = Enum.RaycastFilterType.Exclude
+			params.FilterDescendantsInstances = {hitbox, player.Character}
+			
+			local hits = workspace:GetPartBoundsInBox(hitbox.CFrame, hitbox.Size, params)
+			for _, v in pairs(hits) do
+				local enemyChar = v.Parent
+				local hum = enemyChar:FindFirstChild("Humanoid")
+				if hum and not hitPlayers[hum.Parent] then
+					hitPlayers[hum.Parent] = true
+					local damage = cdScript.Kite.SpawnedGun.X.Damage
+					local blockingDamage = math.floor((damage/2)*10+0.5)/10
+					
+					if enemyChar:GetAttribute("Blocking") == false then
+						hum:TakeDamage(damage)
+						modScript.damageLooks(player, v, damage)
+						modScript.stun(v.Parent, 0.8)
+						modScript.knockback(player.Character, hum.Parent, -2)
+						rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, damage)
+						local clip = hum.Animator:LoadAnimation(rs.HurtAnims["hurtAnim (1)"])
+						clip:Play()
+					else
+						hum:TakeDamage(blockingDamage)
+						modScript.damageLooks(player, v, blockingDamage)
+						rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, blockingDamage)
+					end
+				end
+			end
+			task.wait(0.1)
+			hitPlayers = {}
+			
+		end
+		hitbox:Destroy()
+	end)
+	
+end)
+
+local finishingBlowEvent = rs.RemoteEvents.NenAbilities.KiteMoves.SpawnedGun.C
+finishingBlowEvent.OnServerEvent:Connect(function(player, target)
+	local checks = modScript.checkAll(player)
+	if checks == false or player.Character:GetAttribute("Nen") < cdScript.Kite.SpawnedGun.C.Cost then return end
+	if cdManager.IsOnCooldown(player, "C") == true then return end
+	
+	player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")-cdScript.Kite.SpawnedGun.C.Cost)
+	rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, cdScript.Kite.SpawnedGun.C.Cost)
+	
+	local anims = animManager:GetAnimations(player.Character)
+	local hrp = player.Character.PrimaryPart
+	local barrel = player.Character.SpawnedGun.WeaponBody.Barrel
+	local direction = (target-hrp.Position).Unit*27
+	local vectorGoal = direction + hrp.Position
+	
+	local hitbox = rs.VFX.bruhBox:Clone()
+	hitbox.CFrame = CFrame.lookAt(barrel.Position, vectorGoal) * CFrame.new(0, 0, -14)
+	hitbox.Parent = game.Workspace
+	hitbox.Name = "CMoveBox"
+	
+
+	local hitboxParams = OverlapParams.new()
+	hitboxParams.FilterType = Enum.RaycastFilterType.Exclude
+	hitboxParams.FilterDescendantsInstances = {player.Character, hitbox}
+
+	local hits = game.Workspace:GetPartBoundsInBox(hitbox.CFrame, hitbox.Size, hitboxParams)
+	
+	for _, hit in hits do
+		local hum = hit.Parent:FindFirstChild("Humanoid")
+		if hum then
+			local damage = cdScript.Kite.SpawnedGun.C.Damage
+			local blockingDamage = math.floor((damage/2)*10+0.5)/10
+
+			cdManager.SetCooldown(player, "C", cdScript.Kite.SpawnedGun.C.Cooldown)
+			UICDEvent:FireClient(player, "C", cdScript.Kite.SpawnedGun.C.Cooldown)	
+			local tpEffect = rs.VFX.TPEffect:Clone()
+			tpEffect.CFrame = hrp.CFrame
+			tpEffect.Parent = player.Character
+			
+			local m6D = Instance.new("Motor6D")
+			m6D.Parent = hrp
+			m6D.Part0 = hrp
+			m6D.Part1 = tpEffect
+			game:GetService("Debris"):AddItem(tpEffect, 0.6)
+			hrp.CFrame = hrp.CFrame * CFrame.new(-5, 0, 3)
+			tpEffect.Soru.Enabled = true
+			task.wait(0.1)
+			tpEffect.Soru.Enabled = false
+			task.wait(0.1)
+			hrp.CFrame = hrp.CFrame * CFrame.new(10, 0, 3)
+			tpEffect.Soru.Enabled = true
+			task.wait(0.1)
+			tpEffect.Soru.Enabled = false
+			modScript.stun(player.Character, 2)
+			modScript.stun(hit.Parent, 2.9)
+			--modScript.knockback(player.Character, hit.Parent, -2)
+			task.wait(0.1)
+			hitbox:Destroy()
+			hrp.CFrame = hit.Parent.PrimaryPart.CFrame * CFrame.new(0, 0, 8)
+			
+			anims.barrageClip:Play()
+			task.spawn(function()
+				task.wait(anims.barrageClip.Length)
+				anims.barragePoseClip:Play()
+				task.wait(0.3)
+				modScript.createHitEffect(barrel.Position, rs.VFX.KiteVFX.finisherBullet, target)
+				modScript.damageLooks(player, hit, damage)
+				hum:TakeDamage(damage)
+				rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, damage)
+				modScript.knockback(player.Character, hit.Parent, 50)
+				ragdollModule:Ragdoll(hit.Parent, 2)
+				task.spawn(function()
+					task.wait(1.7)
+					anims.barragePoseClip:Stop()
+				end)
+			end)
+			break
+		end
+	end
+	if hitbox then
+		hitbox:Destroy()
+	end
+end)
+
+local scytheM1 = rs.RemoteEvents.NenAbilities.KiteMoves.SpawnedScythe.ScytheM1Event
+
+scytheM1.OnServerEvent:Connect(function(player, target)
+	local checks = modScript.checkAll(player)
+	if player.Character:GetAttribute("Stunned") == true or player.Character:GetAttribute("Blocking") == true or player.Character:GetAttribute("Dashing") == true or player.Character:GetAttribute("Cooldown") == true then return end
+
+
+	local anims = animManager:GetAnimations(player.Character)
+	local hrp = player.Character.PrimaryPart
+
+
+	local origin = hrp.Position
+	local direction = (target - origin).Unit*20
+	local vectorGoal = hrp.Position + direction
+	
+
+	--player.Character.SpawnedScythe.Handle.Motor6D.C1 *= CFrame.new(0, 1, 0)
+
+	player.Character:SetAttribute("Cooldown", true)
+	--player.Character:SetAttribute("Attacking", true)
+	modScript.applyAttackingState(player.Character, anims["scytheClip"..player.Character:GetAttribute("Combo")].Length-0.2)
+	player.Character:SetAttribute("Sprinting", false)
+
+
+	
+	anims["scytheClip"..player.Character:GetAttribute("Combo")]:Play()
+	
+	task.spawn(function()
+		if player.Character:GetAttribute("Combo") < 5  then
+			task.wait(anims["scytheClip"..player.Character:GetAttribute("Combo")].Length-0.2)
+			player.Character:SetAttribute("Cooldown", false)
+			
+
+		else
+			task.wait(3.6)
+			if player.Character then player.Character:SetAttribute("Cooldown", false) end
+		end
+	end)
+	task.spawn(function()
+		local len = rs.NenAbilities.Kite.scythewaits:FindFirstChild(player.Character:GetAttribute("Combo"))
+		task.wait(len.Value)
+		--modScript.knockback(player.Character, player.Character, 10)
+		if player.Character:GetAttribute("Stunned") == true then 
+			anims["scytheClip"..player.Character:GetAttribute("Combo")]:Stop()
+			return 
+		end
+		local hitbox = rs.VFX.Hitboxes.KilluaHitboxes.palmHitbox:Clone()
+		hitbox.CFrame = CFrame.lookAt(hrp.Position, vectorGoal) * CFrame.new(0, 0, -4)
+		hitbox.Parent = game.Workspace
+		hitbox.Name = "CMoveBox"
+		game:GetService("Debris"):AddItem(hitbox, 0.1)
+		
+		local hitboxParams = OverlapParams.new()
+		hitboxParams.FilterType = Enum.RaycastFilterType.Exclude
+		hitboxParams.FilterDescendantsInstances = {player.Character, hitbox}
+
+		local hits = workspace:GetPartBoundsInBox(hitbox.CFrame, hitbox.Size, hitboxParams)
+		local hitPlayers = {}
+
+		for _, hit in hits do
+			local hum = hit.Parent:FindFirstChild("Humanoid")
+			if hum and not hitPlayers[hum.Parent] then
+				--player.Character:SetAttribute("Speed", 4)
+				hitPlayers[hum.Parent] = true
+				--local clip = hum.Animator:LoadAnimation(rs.HurtAnims["hurtAnim (1)"]):Play()
+				
+				modScript.createHitEffect(hit.Parent.PrimaryPart.Position, rs.VFX.CombatVFX.counterFX, hrp.Position)
+				
+				
+				
+				if hit.Parent:GetAttribute("Blocking") == false then
+					print("hitting not blocker")
+					if player.Character:GetAttribute("Combo") < 5 then
+						hum:TakeDamage(8)
+						modScript.damageLooks(player, hit, 8)
+						modScript.stun(hit.Parent,  2)
+						rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, 8)
+					else
+						hum:TakeDamage(11)
+						modScript.damageLooks(player, hit, 11)
+						modScript.stun(hit.Parent, 2.3)
+						ragdollModule:Ragdoll(hit.Parent, 2.3)
+						modScript.knockback(player.Character, hit.Parent, 50)
+						rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, 11)
+					end
+				else
+					print("hitting blocker")
+					if player.Character:GetAttribute("Combo") < 5 then
+						hum:TakeDamage(4)
+						modScript.damageLooks(player, hit, 4)
+						rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, 4)
+						
+					else
+						hum:TakeDamage(8)
+						modScript.damageLooks(player, hit, 8)
+						modScript.stun(hit.Parent, 2.3)
+						ragdollModule:Ragdoll(hit.Parent, 2.3)
+						modScript.knockback(player.Character, hit.Parent, 50)
+						modScript.blockbreak(hit.Parent)
+						rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, 8)
+					end
+				end
+			end
+		end
+		
+		if player.Character:GetAttribute("Combo") == 5 then
+			player.Character:SetAttribute("Combo", 1)
+		else
+			player.Character:SetAttribute("Combo", player.Character:GetAttribute("Combo")+1)
+		end
+		
+		task.spawn(function()
+			local prev = player.Character:GetAttribute("Combo")
+			task.wait(2)
+			if player.Character then if prev == player.Character:GetAttribute("Combo") then
+					player.Character:SetAttribute("Combo", 1)
+				end end
+		end)
+	end)
+		
+end)
+
+
+local scytheX = rs.RemoteEvents.NenAbilities.KiteMoves.SpawnedScythe.X
+
+scytheX.OnServerEvent:Connect(function(player)
+	local checks = modScript.checkAll(player)
+	if checks == false or player.Character:GetAttribute("Nen") < cdScript.Kite.SpawnedScythe.X.Cost then return end
+	
+	if cdManager.IsOnCooldown(player, "X") then return end
+	
+	cdManager.SetCooldown(player, "X", cdScript.Kite.SpawnedScythe.X.Cooldown)
+	UICDEvent:FireClient(player, "X", cdScript.Kite.SpawnedScythe.X.Cooldown)
+	player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")-cdScript.Kite.SpawnedScythe.X.Cost)
+	rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, cdScript.Kite.SpawnedScythe.X.Cost)
+	
+	local anims = animManager:GetAnimations(player.Character)
+	player.Character:SetAttribute("Busy", true)
+	player.Character.Humanoid.WalkSpeed = 0
+	player.Character.Humanoid.JumpHeight = 0
+	anims.scytheClip5:Play()
+	
+	
+	
+	task.wait(0.8)
+	local hrp = player.Character.PrimaryPart
+	local hitbox = rs.VFX.Hitboxes.KiteHitboxes.ScytheXHitbox:Clone()
+	hitbox.Position = hrp.Position
+	game:GetService("Debris"):AddItem(hitbox, 0.3)
+	
+	local vfx = rs.VFX.KiteVFX["VFX Ring"]:Clone()
+	vfx.Position = hrp.Position
+	vfx.Parent = game.Workspace
+	game.Debris:AddItem(vfx, 2)
+	task.spawn(function()
+		task.wait(0.05)
+		for _, att in pairs(vfx:GetChildren()) do
+			for _, emitter in pairs(att:GetChildren()) do
+				emitter:Emit(3)
+			end
+		end
+	end)
+	
+	
+	local hitboxParams = OverlapParams.new()
+	hitboxParams.FilterType = Enum.RaycastFilterType.Exclude
+	hitboxParams.FilterDescendantsInstances = {player.Character, hitbox}
+	
+	local hits = game.Workspace:GetPartBoundsInBox(hitbox.CFrame, hitbox.Size, hitboxParams)
+	
+	local hitPlayers = {}
+	for _, hit in hits do
+		local hum = hit.Parent:FindFirstChild("Humanoid")
+		if hum and not hitPlayers[hit.Parent] then
+			hitPlayers[hit.Parent] = true
+			local damage = cdScript.Kite.SpawnedScythe.X.Damage
+			local blockingDamage = math.floor((damage/2)*10+0.5)/10
+
+			--modScript.createHitEffect(hit.Parent.PrimaryPart.Position, rs.VFX.CombatVFX.counterFX, hrp.Position)
+			
+			
+			
+			if hit.Parent:GetAttribute("Blocking") == true then
+				modScript.blockbreak(hit.Parent)
+				hum:TakeDamage(blockingDamage)
+				ragdollModule:Ragdoll(hit.Parent, 2)
+				modScript.knockback(player.Character, hit.Parent, 50)
+				modScript.stun(hit.Parent, 2)
+				modScript.damageLooks(player, hit, blockingDamage)
+				rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, blockingDamage)
+			else
+				hum:TakeDamage(damage)
+				ragdollModule:Ragdoll(hit.Parent, 2)
+				modScript.knockback(player.Character, hit.Parent, 50)
+				modScript.stun(hit.Parent, 2)
+				modScript.damageLooks(player, hit, damage)
+				rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, damage)
+			end
+			
+		end
+	end
+	player.Character:SetAttribute("Busy", false)
+	player.Character.Humanoid.WalkSpeed = player.Character:GetAttribute("Speed") + player.Character:GetAttribute("SpeedBuff")
+	player.Character.Humanoid.JumpHeight = 7.2
+end)
+
+rs.RemoteEvents.NenAbilities.KiteMoves.SpawnedScythe.C.OnServerEvent:Connect(function(player)
+	local checks = modScript.checkAll(player)
+	if checks == false or player.Character:GetAttribute("Nen") < cdScript.Kite.SpawnedScythe.C.Cost then return end
+	if cdManager.IsOnCooldown(player, "C") then return end
+
+	cdManager.SetCooldown(player, "C", cdScript.Kite.SpawnedScythe.C.Cooldown)
+	UICDEvent:FireClient(player, "C", cdScript.Kite.SpawnedScythe.C.Cooldown)
+	player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")-cdScript.Kite.SpawnedScythe.C.Cost)
+	rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, cdScript.Kite.SpawnedScythe.C.Cost)
+	
+
+	local anims = animManager:GetAnimations(player.Character)
+	anims.scytheDashClip:Play()
+
+	task.wait(0.7)
+	local hrp = player.Character.PrimaryPart
+	for i=1, 3, 1 do
+		modScript.createHitEffect(hrp.Position, rs.VFX.blackFX)
+		for _, v in pairs(player.Character:GetChildren()) do
+			if v.Name == "Right Arm" or v.Name == "Left Arm" or v.Name == "Torso" or v.Name == "Right Leg" or v.Name == "Left Leg" or v.Name == "Head" then
+				local part = Instance.new("MeshPart")
+				part.Size = v.Size
+				part.Anchored = true
+				part.CanCollide = false
+				part.CanTouch = false
+				part.Color = Color3.new(0,0,0)
+				part.Transparency = 0.4
+				part.CFrame = v.CFrame
+				part.Parent = game.Workspace
+				local partInfo = TweenInfo.new(2, Enum.EasingStyle.Linear, Enum.EasingDirection.In)
+				local tween = tweenService:Create(part, tweenInfo, {Transparency = 1}):Play()
+				game:GetService("Debris"):AddItem(part, 2)
+			end
+		end
+		
+		
+		local dir = hrp.CFrame.LookVector*10
+		local realDir = Vector3.new(dir.X, 0, dir.Z)
+		local vectorGoal = hrp.Position + realDir
+		
+		
+		task.spawn(function()
+			task.wait(0.1)
+			local hitPlayers = {}
+			local hitbox = rs.VFX.Hitboxes.KiteHitboxes.waltzHitbox:Clone()
+			hitbox.CFrame =  CFrame.lookAt(hrp.Position, vectorGoal) * CFrame.new(0, 0, -14)
+			hitbox.Parent = game.Workspace
+			game:GetService("Debris"):AddItem(hitbox, 0.1)
+			
+			local hitboxParams = OverlapParams.new()
+			hitboxParams.FilterType = Enum.RaycastFilterType.Exclude
+			hitboxParams.FilterDescendantsInstances = {player.Character, hitbox}
+			
+			local hits = game.Workspace:GetPartBoundsInBox(hitbox.CFrame, hitbox.Size, hitboxParams)
+			for _, hit in hits do
+				local hum = hit.Parent:FindFirstChild("Humanoid")
+				if hum and not hitPlayers[hit.Parent] then
+					hitPlayers[hit.Parent] = true
+					local damage = cdScript.Kite.SpawnedScythe.C.Damage
+					local blockingDamage = math.floor((damage/2)*10+0.5)/10
+
+					hum:TakeDamage(damage)
+					modScript.damageLooks(player, hit, damage)
+					modScript.stun(hit.Parent, 1)
+					modScript.createHitEffect(hit.Parent.PrimaryPart.Position, rs.VFX.CombatVFX.counterFX)
+					rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, damage)
+				end
+			end
+		end)
+		
+		local bodyVelocity = Instance.new("BodyVelocity")
+		bodyVelocity.MaxForce = Vector3.new(100000, 100000, 100000)
+		bodyVelocity.Velocity = realDir*15
+		bodyVelocity.Parent = hrp
+
+		game:GetService("Debris"):AddItem(bodyVelocity, 0.08)
+		
+		
+		task.wait(0.7)
+	end
+	anims.scytheDashClip:Stop()
+end)
