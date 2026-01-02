@@ -1,0 +1,19 @@
+local module = {
+	["Gold"] = {
+		["Title"] = "Gold",
+		["Desc"] = "The standardized currency of the world.",
+		["Image"] = "rbxassetid://131364852053693",
+		["Type"] = "Currency",
+		["MaxQty"] = 10000,
+	},	
+	["Fishing Rod"] = {
+		["Title"] = "Fishing Rod",
+		["Desc"] = "A fisherman's best friend.",
+		["Image"] = "rbxassetid://119123830469132",
+		["Type"] = "Tool",
+		["MaxQty"] = 1,
+	}
+	
+}
+
+return module
