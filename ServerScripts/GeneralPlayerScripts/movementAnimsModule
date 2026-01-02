@@ -1,0 +1,70 @@
+local rs = game:GetService("ReplicatedStorage")
+
+local AnimationManager = {}
+
+local cache = {} 
+
+local movementAnims = rs:WaitForChild("MovementAnims")
+local kiteAnims = rs:WaitForChild("NenAbilities"):WaitForChild("Kite"):WaitForChild("KiteAnims")
+
+local walkAnim = movementAnims:WaitForChild("walkAnim")
+local leftLean = movementAnims:WaitForChild("leftLeanAnim")
+local rightLean = movementAnims:WaitForChild("rightLeanAnim")
+local leftSprintAnim = movementAnims:WaitForChild("leftSprintAnim")
+local rightSprintAnim = movementAnims:WaitForChild("rightSprintAnim")
+local sprintAnim = movementAnims:WaitForChild("sprintAnim")
+local startJumpAnim = movementAnims:WaitForChild("startJumpAnim")
+local endJumpAnim = movementAnims:WaitForChild("endJumpAnim")
+local rollAnim = movementAnims:WaitForChild("rollAnim")
+local leftRollAnim = movementAnims:WaitForChild("leftRollAnim")
+local rightRollAnim = movementAnims:WaitForChild("rightRollAnim")
+local backRollAnim = movementAnims:WaitForChild("backRollAnim")
+local idleAnim = movementAnims:WaitForChild("idleAnim")
+local scytheIdleAnim = kiteAnims:WaitForChild("scytheIdle")
+local scytheWalkAnim = kiteAnims:WaitForChild("scytheWalk")
+local scytheRunAnim = kiteAnims:WaitForChild("scytheRun")
+
+
+
+
+function AnimationManager:GetAnimations(character)
+	if cache[character] then
+		return cache[character]
+	end
+
+	local humanoid = character:WaitForChild("Humanoid")
+	local animator = humanoid:WaitForChild("Animator")
+
+	
+
+	local anims = {
+		walk = animator:LoadAnimation(walkAnim),
+		leftLean = animator:LoadAnimation(leftLean),
+		rightLean = animator:LoadAnimation(rightLean),
+		leftSprint = animator:LoadAnimation(leftSprintAnim),
+		rightSprint = animator:LoadAnimation(rightSprintAnim),
+		sprint = animator:LoadAnimation(sprintAnim),
+		startJump = animator:LoadAnimation(startJumpAnim),
+		endJump = animator:LoadAnimation(endJumpAnim),
+		roll = animator:LoadAnimation(rollAnim),
+		leftRoll = animator:LoadAnimation(leftRollAnim),
+		rightRoll = animator:LoadAnimation(rightRollAnim),
+		backRoll = animator:LoadAnimation(backRollAnim),
+		idle = animator:LoadAnimation(idleAnim),
+		scytheIdle = animator:LoadAnimation(scytheIdleAnim),
+		scytheWalk = animator:LoadAnimation(scytheWalkAnim),
+		scytheRun = animator:LoadAnimation(scytheRunAnim),
+	}
+	anims.idle.Priority = Enum.AnimationPriority.Idle
+	anims.scytheIdle.Priority = Enum.AnimationPriority.Idle
+	anims.scytheWalk.Priority = Enum.AnimationPriority.Movement
+	anims.scytheRun.Priority = Enum.AnimationPriority.Movement
+	cache[character] = anims
+	return anims
+end
+
+function AnimationManager:ClearCache(character)
+	cache[character] = nil
+end
+
+return AnimationManager
