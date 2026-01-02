@@ -1,0 +1,33 @@
+local CooldownManager = {}
+local cooldowns = {}
+
+
+function CooldownManager.InitPlayer(player)
+	cooldowns[player] = {}
+end
+
+function CooldownManager.RemovePlayer(player)
+	cooldowns[player] = nil
+end
+
+function CooldownManager.SetCooldown(player, skillName, duration)
+	if not cooldowns[player] then return end
+	cooldowns[player][skillName] = tick() + duration
+end
+
+
+function CooldownManager.IsOnCooldown(player, skillName)
+	local skillCooldown = cooldowns[player] and cooldowns[player][skillName]
+	return skillCooldown and tick() < skillCooldown
+end
+
+
+function CooldownManager.GetRemaining(player, skillName)
+	local endTime = cooldowns[player] and cooldowns[player][skillName]
+	if endTime then
+		return math.max(0, endTime - tick())
+	end
+	return 0
+end
+
+return CooldownManager
