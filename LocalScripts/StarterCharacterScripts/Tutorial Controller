@@ -6,23 +6,95 @@ local playerGui = player:WaitForChild("PlayerGui")
 local tutorialText = require(rs.tutorialText)
 local tutorialFrame = playerGui.Main.TutorialFrame
 local active = false
+local curTask = "Walking"
+local completedTasks = {}
 
 
 local loadText = function(category, task)
-  local fullText = category
-  for i=1, #fullText, 1 do
-    tutorialFrame.Title.Text = string.sub(tutorialFrame.Title.Text, 0, i)
-  end
+    local fullText = category
+    for i=1, #fullText, 1 do
+        tutorialFrame.Title.Text = string.sub(tutorialFrame.Title.Text, 0, i)
+        task.wait(0.05)
+    end
 
-  local fullText = tutorialText.Desc.Text = string.sub(tutorialFrame.Desc.Text, 0, i) 
-  for i=1, #fullText, 1 do
-    tutorialFrame.Desc.Text = string.sub(tutorialFrame.Desc.Text, 0, i)
-  end
+    local fullText = tutorialText.Desc.Text = string.sub(tutorialFrame.Desc.Text, 0, i) 
+    for i=1, #fullText, 1 do
+        tutorialFrame.Desc.Text = string.sub(tutorialFrame.Desc.Text, 0, i)
+        task.wait(0.05)
+    end
 end
 
 
 task.wait(2)
 
+loadText("Movement", "Walking")
+active = true
 
+
+uis.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+  
+    if input.KeyCode == Enum.KeyCode.W or input.KeyCode == Enum.KeyCode.A or input.KeyCode == Enum.KeyCode.S or input.KeyCode == Enum.KeyCode.D then
+        if active == true then
+            if player.Character:GetAttribute("Sprinting") == true and not completedTasks["Sprinting"] and curTask == "Sprinting" then
+                active = false
+                completedTasks["Sprinting"] = true
+                --loadText("Movement", "Good work!")
+                task.wait(1)
+                loadText("Movement", "Dashing")
+                active = true
+                curTask = "Dashing"
+            elseif player.Character:GetAttribute("Sprinting") == false and not completedTasks["Walking"] and curTask == "Walking" then
+                active = false
+                completedTasks["Walking"] = true
+                --loadText("Movement", "Good work!")
+                task.wait(1)
+                loadText("Movement", "Sprinting")
+                active = true
+                curTask = "Sprinting"
+            end
+        end
+    end
+
+    if input.KeyCode == Enum.KeyCode.Q then
+        if active == true and not completedTasks["Dashing"] and curTask == "Dashing" then
+            active = false
+            completedTasks["Dashing"] = true
+            task.wait(1)
+            loadText("Movement", "Jumping")
+            active = true
+            curTask = "Jumping"
+        end
+    end
+  
+    if input.KeyCode == Enum.KeyCode.Space then
+        if active == true then
+            if player.Character:GetAttribute("Climbing") then 
+                if not completedTasks["Climbing"] and curTask == "Climbing" then
+                    active = false
+                    completedTasks["Climbing"] = true
+                    task.wait(1)
+                    loadText("Combat", "Punching")
+                    active = true
+                    curTask = "Punching"
+                end
+            else
+                if not completedTasks["Jumping"] and curTask == "Jumping" then
+                    active = false
+                    completedTasks["Jumping"] = true
+                    task.wait(1)
+                    loadText("Movement", "Climbing")
+                    active = true
+                    curTask = "Movement"
+                end
+            end
+        end
+    end
+
+        
+    
+    
+
+end)
 
 
