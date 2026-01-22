@@ -1,0 +1,28 @@
+local rs = game:GetService("ReplicatedStorage")
+local uis = game:GetService("UserInputService")
+local player = game.Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+
+local tutorialText = require(rs.tutorialText)
+local tutorialFrame = playerGui.Main.TutorialFrame
+local active = false
+
+
+local loadText = function(category, task)
+  local fullText = category
+  for i=1, #fullText, 1 do
+    tutorialFrame.Title.Text = string.sub(tutorialFrame.Title.Text, 0, i)
+  end
+
+  local fullText = tutorialText.Desc.Text = string.sub(tutorialFrame.Desc.Text, 0, i) 
+  for i=1, #fullText, 1 do
+    tutorialFrame.Desc.Text = string.sub(tutorialFrame.Desc.Text, 0, i)
+  end
+end
+
+
+task.wait(2)
+
+
+
+
