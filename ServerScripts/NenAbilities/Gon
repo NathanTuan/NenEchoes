@@ -1,9 +1,11 @@
 local rs = game:GetService("ReplicatedStorage")
-local modScript = require(game.ServerScriptService.ModuleScript)
-local cdManager = require(rs.CooldownManager)
-local cdScript = require(rs.Cooldowns)
+local GameModules = require(rs.GameModules)
+local GeneralModule = GameModules.GeneralModule
+local cdManager = GameModules.CooldownManagerModule
+local statusEffectModule = require(rs.NenAbilityStatusEffectsModule)
+local nenAbilityInfo = GameModules.NenAbilityInfoModule
 local animScript = require(script.Parent.NenAbilityAnimationManager)
-local ragdollModule = require(game.ServerScriptService.ragdollModule)
+local ragdollModule = GameModules.RagdollModule
 local UICDEvent = rs.RemoteEvents.UIEvents.UICDEvent
 
 
@@ -11,15 +13,15 @@ local UICDEvent = rs.RemoteEvents.UIEvents.UICDEvent
 rs.RemoteEvents.NenAbilities.GonMoves.Z.OnServerEvent:Connect(function(player, target, bool)
 
 	if bool == false then
-		local checks = modScript.checkAll(player)
+		local checks = GeneralModule.checkAll(player)
 		if checks == false then 
 			return
 		end
-		if cdManager.IsOnCooldown(player, "Z") == true or player.Character:GetAttribute("Nen") < cdScript.Gon.Z.Cost then return end
-		player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")-cdScript.Gon.Z.Cost)
-		rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, cdScript.Gon.Z.Cost)
-		cdManager.SetCooldown(player, "Z", cdScript.Gon.Z.Cooldown)
-		UICDEvent:FireClient(player, "Z", cdScript.Gon.Z.Cooldown)
+		if cdManager.IsOnCooldown(player, "Z") == true or player.Character:GetAttribute("Nen") < nenAbilityInfo.Gon.Z.Cost then return end
+		player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")-nenAbilityInfo.Gon.Z.Cost)
+		rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, nenAbilityInfo.Gon.Z.Cost)
+		cdManager.SetCooldown(player, "Z", nenAbilityInfo.Gon.Z.Cooldown)
+		UICDEvent:FireClient(player, "Z", nenAbilityInfo.Gon.Z.Cooldown)
 		
 	
 		player.Character:SetAttribute("Busy", true)
@@ -97,32 +99,17 @@ rs.RemoteEvents.NenAbilities.GonMoves.Z.OnServerEvent:Connect(function(player, t
 		local hitPlayers = {}
 
 		for _, hit in hits do
-
+			if not hit.Parent then return end
 			local hum = hit.Parent:FindFirstChild("Humanoid")
 			if hum and not hitPlayers[hum.Parent] then
 				hitPlayers[hum.Parent] = true
-				local damage = cdScript.Gon.Z.Damage
+				local damage = nenAbilityInfo.Gon.Z.Damage
 				local blockingDamage = math.floor((damage/2)*10+0.5)/10
 				
 				if hit.Parent:GetAttribute("Parrying") == true then
-					local parryFX = rs.VFX.CombatVFX.parryFX:Clone()
-					parryFX.Position = hit.Parent.PrimaryPart.Position
-					parryFX.Parent = game.Workspace
-					task.wait(0.05)
-					game:GetService("Debris"):AddItem(parryFX, 1)
-					for _, v in pairs(parryFX:GetChildren()) do
-						if v:IsA("ParticleEmitter") then
-							v:Emit(v:GetAttribute("EmitCount"))
-						end
-					end
+					statusEffectModule.ApplyStatusEffects(player, "Gon", "Z", hit.Parent.PrimaryPart, "Parried")
 				elseif hit.Parent:GetAttribute("Blocking") == true then
-					hum:TakeDamage(blockingDamage)
-					modScript.damageLooks(player, hit, blockingDamage)
-					ragdollModule:Ragdoll(hit.Parent, 1.7)
-					modScript.knockback(player.Character, hit.Parent, 50)
-					modScript.stun(hit.Parent, 1.7)
-					modScript.blockbreak(hit.Parent)
-					rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, blockingDamage)
+					statusEffectModule.ApplyStatusEffects(player, "Gon", "Z", hit.Parent.PrimaryPart, "Blocked")
 					
 					local impactVFX = rs.VFX.GonVFX.Rock.FistCollision:Clone()
 					impactVFX.Position = hit.Parent.PrimaryPart.Position
@@ -139,12 +126,7 @@ rs.RemoteEvents.NenAbilities.GonMoves.Z.OnServerEvent:Connect(function(player, t
 					
 
 				else
-					hum:TakeDamage(damage)
-					modScript.damageLooks(player, hit, damage)
-					ragdollModule:Ragdoll(hit.Parent, damage)
-					modScript.knockback(player.Character, hit.Parent, 50)
-					modScript.stun(hit.Parent, 1.7)
-					rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, damage)
+					statusEffectModule.ApplyStatusEffects(player, "Gon", "Z", hit.Parent.PrimaryPart, "Hit")
 					
 					local impactVFX = rs.VFX.GonVFX.Rock.FistCollision:Clone()
 					impactVFX.Position = hit.Parent.PrimaryPart.Position
@@ -165,7 +147,7 @@ rs.RemoteEvents.NenAbilities.GonMoves.Z.OnServerEvent:Connect(function(player, t
 			
 		end
 		player.Character:SetAttribute("Busy", false)
-		player.Character.Humanoid.WalkSpeed = player.Character:GetAttribute("Speed") + player.Character:GetAttribute("SpeedBuff")
+		player.Character.Humanoid.WalkSpeed = player.Character:GetAttribute("Speed") + GeneralModule.getSpeedBuffs(player.Character)
 		player.Character.Humanoid.JumpHeight = 7.2
 	end
 
@@ -175,14 +157,14 @@ end)
 
 rs.RemoteEvents.NenAbilities.GonMoves.X.OnServerEvent:Connect(function(player, target, bool)
 	if bool == false then
-		local gc = cdScript.Gon.X.Cost
-		local checks = modScript.checkAll(player)
+		local gc = nenAbilityInfo.Gon.X.Cost
+		local checks = GeneralModule.checkAll(player)
 		if checks == false then return end
 		if cdManager.IsOnCooldown(player, "X") == true or player.Character:GetAttribute("Nen") < gc then return end
 		player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")-gc)
 		rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, gc)
-		cdManager.SetCooldown(player, "X", cdScript.Gon.X.Cooldown)
-		UICDEvent:FireClient(player, "X", cdScript.Gon.X.Cooldown)
+		cdManager.SetCooldown(player, "X", nenAbilityInfo.Gon.X.Cooldown)
+		UICDEvent:FireClient(player, "X", nenAbilityInfo.Gon.X.Cooldown)
 		player.Character:SetAttribute("Busy", true)
 		player.Character.Humanoid.WalkSpeed = 0
 		player.Character.Humanoid.JumpHeight = 0
@@ -231,7 +213,7 @@ rs.RemoteEvents.NenAbilities.GonMoves.X.OnServerEvent:Connect(function(player, t
 			windVFX:Destroy()
 			anims.paperClip:Stop()
 			player.Character:SetAttribute("Busy", false)
-			player.Character.Humanoid.WalkSpeed = player.Character:GetAttribute("Speed") + player.Character:GetAttribute("SpeedBuff")
+			player.Character.Humanoid.WalkSpeed = player.Character:GetAttribute("Speed") + GeneralModule.getSpeedBuffs(player.Character)
 			player.Character.Humanoid.JumpHeight = 7.2
 		end)
 	
@@ -271,30 +253,17 @@ rs.RemoteEvents.NenAbilities.GonMoves.X.OnServerEvent:Connect(function(player, t
 		
 		local hitPlayers = {}
 		ball.Touched:Connect(function(hit)
+			if not hit.Parent then return end
 			local hum = hit.Parent:FindFirstChild("Humanoid")
 			if hum and not hitPlayers[hum.Parent] and hit.Parent.Name ~= player.Character.Name then
 				hitPlayers[hum.Parent] = true
-				local damage = cdScript.Gon.X.Damage
+				local damage = nenAbilityInfo.Gon.X.Damage
 				local blockingDamage = math.floor((damage/2)*10+0.5)/10
 				
 				if hit.Parent:GetAttribute("Parrying") == true then
-					local parryFX = rs.VFX.CombatVFX.parryFX:Clone()
-					parryFX.Position = hit.Parent.PrimaryPart.Position
-					parryFX.Parent = game.Workspace
-					task.wait(0.05)
-					game:GetService("Debris"):AddItem(parryFX, 1)
-					for _, v in pairs(parryFX:GetChildren()) do
-						if v:IsA("ParticleEmitter") then
-							v:Emit(v:GetAttribute("EmitCount"))
-						end
-					end
+					statusEffectModule.ApplyStatusEffects(player, "Gon", "X", hit.Parent.PrimaryPart, "Parried")
 				elseif hit.Parent:GetAttribute("Blocking") == true then
-					hum:TakeDamage(blockingDamage)
-					modScript.damageLooks(player, hit, blockingDamage)
-					ragdollModule:Ragdoll(hit.Parent, 1.7)
-					modScript.stun(hit.Parent, 1.7)
-					modScript.blockbreak(hit.Parent)
-					rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, blockingDamage)
+					statusEffectModule.ApplyStatusEffects(player, "Gon", "X", hit.Parent.PrimaryPart, "Blocked")
 					
 					local impactVFX = rs.VFX.GonVFX.Rock.FistCollision:Clone()
 					impactVFX.Position = hit.Parent.PrimaryPart.Position
@@ -310,11 +279,7 @@ rs.RemoteEvents.NenAbilities.GonMoves.X.OnServerEvent:Connect(function(player, t
 					game:GetService("Debris"):AddItem(impactVFX, 2)
 
 				else
-					hum:TakeDamage(damage)
-					modScript.damageLooks(player, hit, damage)
-					ragdollModule:Ragdoll(hit.Parent, 1.7)
-					modScript.stun(hit.Parent, 1.7)
-					rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, damage)
+					statusEffectModule.ApplyStatusEffects(player, "Gon", "X", hit.Parent.PrimaryPart, "Hit")
 					
 					local impactVFX = rs.VFX.GonVFX.Rock.FistCollision:Clone()
 					impactVFX.Position = hit.Parent.PrimaryPart.Position
@@ -338,14 +303,14 @@ end)
 rs.RemoteEvents.NenAbilities.GonMoves.C.OnServerEvent:Connect(function(player, target)
 	
 
-	local gc = cdScript.Gon.C.Cost
-	local checks = modScript.checkAll(player)
+	local gc = nenAbilityInfo.Gon.C.Cost
+	local checks = GeneralModule.checkAll(player)
 	if checks == false then return end
 	if cdManager.IsOnCooldown(player, "C") == true or player.Character:GetAttribute("Nen") < gc then return end
 	player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")-gc)
 	rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, gc)
-	cdManager.SetCooldown(player, "C", cdScript.Gon.C.Cooldown)
-	UICDEvent:FireClient(player, "C", cdScript.Gon.C.Cooldown)
+	cdManager.SetCooldown(player, "C", nenAbilityInfo.Gon.C.Cooldown)
+	UICDEvent:FireClient(player, "C", nenAbilityInfo.Gon.C.Cooldown)
 	
 	player.Character:SetAttribute("Busy", true)
 	player.Character.Humanoid.WalkSpeed = 0
@@ -401,24 +366,24 @@ rs.RemoteEvents.NenAbilities.GonMoves.C.OnServerEvent:Connect(function(player, t
 	windVFX.Position = player.Character.PrimaryPart.Position + Vector3.new(0, 1, 0)
 	windVFX.Parent = game.Workspace
 	
+	GeneralModule.setCollisionGroup(player.Character, 3)
 	local anims = animScript:GetAnimations(player.Character)
 	anims.scissorClip:Play()
 	task.spawn(function()
 		task.wait(0.9)
 		windVFX:Destroy()
 		holdVFX:Destroy()
-		modScript.knockback(player.Character, player.Character, 100)
+		GeneralModule.knockback(player.Character, player.Character, 100)
 		
 		local slashVFX = rs.VFX.GonVFX.Scissor.Slash:Clone()
 		slashVFX.CFrame = CFrame.lookAt(hrp.Position, vectorGoal) * CFrame.Angles(0, math.rad(90), 0) *CFrame.new(0, 0, 0)
 		slashVFX.Parent = game.Workspace
-		--[[
+		
 		local m6D = Instance.new("Motor6D")
 		m6D.Parent = slashVFX
-		m6D.Part0= slashVFX
-		m6D.Part1 = player.Character.HumanoidRootPart
-		m6D.C1 = CFrame.new(0, 0, 0)*CFrame.Angles(0, math.rad(90), 0)
-		]]
+		m6D.Part0= player.Character.HumanoidRootPart
+		m6D.Part1 = slashVFX
+		m6D.C1 = CFrame.new(0, 0, 5)*CFrame.Angles(0, math.rad(-90), 0)	
 		
 		game:GetService("Debris"):AddItem(slashVFX, 2)
 		
@@ -456,38 +421,20 @@ rs.RemoteEvents.NenAbilities.GonMoves.C.OnServerEvent:Connect(function(player, t
 		
 			local hits = workspace:GetPartBoundsInBox(hitbox.CFrame, hitbox.Size, hitboxParams)
 			for _, hit in hits do
-
+				if not hit.Parent then return end
 				local hum = hit.Parent:FindFirstChild("Humanoid")
 				if hum and not hitPlayers[hum.Parent] then
 					hitPlayers[hum.Parent] = true
-					local damage = cdScript.Gon.C.Damage
+					local damage = nenAbilityInfo.Gon.C.Damage
 					local blockingDamage = math.floor((damage/2)*10+0.5)/10
 					
 					if hit.Parent:GetAttribute("Parrying") == true then
-						local parryFX = rs.VFX.CombatVFX.parryFX:Clone()
-						parryFX.Position = hit.Parent.PrimaryPart.Position
-						parryFX.Parent = game.Workspace
-						task.wait(0.05)
-						game:GetService("Debris"):AddItem(parryFX, 1)
-						for _, v in pairs(parryFX:GetChildren()) do
-							if v:IsA("ParticleEmitter") then
-								v:Emit(v:GetAttribute("EmitCount"))
-							end
-						end
+						statusEffectModule.ApplyStatusEffects(player, "Gon", "C", hit.Parent.PrimaryPart, "Parried")
 					elseif hit.Parent:GetAttribute("Blocking") == true then
-						hum:TakeDamage(blockingDamage)
-						modScript.damageLooks(player, hit, blockingDamage)
-						ragdollModule:Ragdoll(hit.Parent, 1.7)
-						modScript.stun(hit.Parent, 1.7)
-						modScript.blockbreak(hit.Parent)
-						rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, blockingDamage)
+						statusEffectModule.ApplyStatusEffects(player, "Gon", "C", hit.Parent.PrimaryPart, "Blocked")
 
 					else
-						hum:TakeDamage(damage)
-						modScript.damageLooks(player, hit, damage)
-						ragdollModule:Ragdoll(hit.Parent, 1.7)
-						modScript.stun(hit.Parent, 1.7)
-						rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, damage)
+						statusEffectModule.ApplyStatusEffects(player, "Gon", "C", hit.Parent.PrimaryPart, "Hit")
 					end
 
 
@@ -497,7 +444,7 @@ rs.RemoteEvents.NenAbilities.GonMoves.C.OnServerEvent:Connect(function(player, t
 			task.wait(0.1)
 		end
 		player.Character:SetAttribute("Busy", false)
-		player.Character.Humanoid.WalkSpeed = player.Character:GetAttribute("Speed") + player.Character:GetAttribute("SpeedBuff")
+		player.Character.Humanoid.WalkSpeed = player.Character:GetAttribute("Speed") + GeneralModule.getSpeedBuffs(player.Character)
 		player.Character.Humanoid.JumpHeight = 7.2
 		
 		
