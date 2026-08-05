@@ -12,10 +12,10 @@ local jumpEvent = rs.RemoteEvents.MovementEvents.JumpEvent
 local landEvent = rs.RemoteEvents.MovementEvents.LandEvent
 local rollEvent = rs.RemoteEvents.MovementEvents.RollEvent
 
-local movementManager = require(script.movementAnimsModule)
+local movementManager = require(script.Parent.movementAnimsModule)
 
 -- Import the modular animation system
-local AnimationSystem = require(script.MovementModule)
+local AnimationSystem = require(script.Parent.MovementModule)
 local AnimationSelector = AnimationSystem.AnimationSelector
 
 -- Helper functions
