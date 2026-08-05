@@ -20,7 +20,7 @@ local activateM1Event = rs.RemoteEvents.CombatEvents.ActivateM1Event
 local GameModules = require(rs.GameModules)
 local GeneralModule = GameModules.GeneralModule
 local ragdollModule = GameModules.RagdollModule
-local combatAnimModule = require(script.combatAnimsModule)
+local combatAnimModule = require(script.Parent.combatAnimsModule)
 
 
 local function yieldAllBut(hum, anim)
