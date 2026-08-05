@@ -1,0 +1,83 @@
+local rs = game:GetService("ReplicatedStorage")
+local ss = game:GetService("ServerStorage")
+local inventoryItems = ss.DataStoreModules.InventoryItems
+local GameModules = require(rs.GameModules)
+local GeneralModule = GameModules.GeneralModule
+
+rs.RemoteEvents.CombatEvents.EquipToolEvent.OnServerEvent:Connect(function(player, itemName, bool)
+	if bool then
+		--print("Equipping: "..itemName)
+	else
+		--print("Unequipping "..itemName)
+	end
+	
+	
+	local character = player.Character
+	if not character then return end
+
+	local humanoid = character:FindFirstChild("Humanoid")
+	if not humanoid then return end
+
+	--tool search and creation
+	local tool =
+		player.Backpack:FindFirstChild(itemName)
+		or character:FindFirstChild(itemName)
+
+	if not tool then
+		local template = inventoryItems:FindFirstChild(itemName)
+		if not template then return end
+
+		tool = template:Clone()
+		tool.Parent = player.Backpack
+	end
+
+	if bool == true then
+		humanoid:UnequipTools()
+		humanoid:EquipTool(tool)
+
+		--Skateboard setup
+		if tool.Name == "Skateboard" then
+			local weld = tool.Handles:FindFirstChild("SkateboardWeld")
+			if weld then
+				
+				weld.Part0 = character:FindFirstChild("Right Arm")
+				weld.Part1 = tool.Handles
+				weld.C0 = CFrame.new(0, -1.5, 0) * CFrame.Angles(0, 0, math.rad(90))
+			
+			end
+		end
+		
+		
+		
+		if tool.Name == "Compass" then
+			local clip = player.Character.Humanoid.Animator:LoadAnimation(rs.Animations.ToolAnims.CompassAnims.EquipAnimation)
+			clip:Play()
+		end
+		
+	else
+		if character:FindFirstChild(itemName) then
+			humanoid:UnequipTools()
+		end
+
+		if tool.Name == "Skateboard" then
+			--GeneralModule.resetAttributes(character)
+			local boost = character:FindFirstChild("SkateboardSpeedBuff")
+			if boost then
+				boost:Destroy()
+			end
+
+			for _, part in pairs(tool.SkateboardModel:GetChildren()) do
+				part.CanCollide = false
+				part.CanTouch = false
+			end
+
+			for _, trail in pairs(tool.SkateboardModel.TrailHolder:GetChildren()) do
+				if trail:IsA("Trail") then
+					trail.Enabled = false
+				end
+			end
+		end
+
+		rs.RemoteEvents.MovementEvents.MoveEndEvent:FireClient(player)
+	end
+end)
