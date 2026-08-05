@@ -1,0 +1,359 @@
+local ocean = game.Workspace:WaitForChild("ocean")
+local bones = {}
+local rayParams = RaycastParams.new()
+rayParams.FilterType = Enum.RaycastFilterType.Exclude
+rayParams.FilterDescendantsInstances = {ocean, game.Workspace:WaitForChild("Baseplate"), game.Workspace:WaitForChild("SandModel")}
+
+--[[
+for _, plane in pairs(ocean:GetChildren()) do
+	if plane:IsA("MeshPart") then
+		local boneData = {}
+		for _, bone in pairs(plane:GetDescendants()) do
+			if bone:IsA("Bone") then
+				local pos = bone.WorldPosition
+				table.insert(boneData, {
+					bone = bone,
+					pos = pos,
+					speedOffset = math.random()*1.3,
+					canMove = nil,
+				})
+			end
+		end
+		bones[plane] = {origin = plane.Position, boneData = boneData}
+	end
+end
+
+ocean.DescendantAdded:Connect(function(desc)
+	
+	if desc:IsA("Bone") then
+		local pos = desc.WorldPosition
+		local plane = desc.Parent
+		if bones[plane] then
+			table.insert(bones[plane].boneData, {
+				bone = desc,
+				pos = pos,
+				speedOffset = math.random()*1.3,
+				canMove = nil,
+			})
+		end
+	elseif desc:IsA("MeshPart") then
+		local plane = desc
+		bones[plane] = {origin = plane.Position, boneData = {}}
+	end
+end)
+
+]]
+local boneBlockages = {}
+local plane = ocean:FindFirstChild("TestPlane1")
+bones[plane] = {origin = plane.Position, boneData = {}}
+--[[
+for _, bone in pairs(plane:GetChildren()) do
+	if bone:IsA("Bone") then
+		boneBlockages[bone] = {
+			["NumChecks"] = 0,
+			["BlockageNum"] = 0,
+		}
+		local pos = bone.WorldPosition
+		table.insert(bones[plane].boneData, {
+			bone = bone,
+			pos = pos,
+			speedOffset = math.random()*1.3,
+			phaseOffset = math.random()*5,
+			amplitude = math.random(3, 5),
+			canMove = nil,
+		})
+		
+	end
+end
+]]
+for _, bone in pairs(plane:GetChildren()) do
+	if bone:IsA("Bone") then
+		boneBlockages[bone] = {
+			["NumChecks"] = 0,
+			["BlockageNum"] = 0,
+		}
+		local pos = bone.WorldPosition
+		table.insert(bones[plane].boneData, {
+			bone = bone,
+			pos = pos,
+			-- Wave 1 properties
+			amplitude1 = math.random(2, 3),
+			wavelength1 = math.random(12, 18),
+			direction1 = Vector3.new(1, 0, 0.5).Unit,
+			speedOffset1 = math.random() * 1.2,
+
+			-- Wave 2 properties (secondary wave for complexity)
+			amplitude2 = math.random(1, 2),
+			wavelength2 = math.random(20, 30),
+			direction2 = Vector3.new(0.5, 0, 1).Unit,
+			speedOffset2 = math.random() * 0.8,
+
+			phaseOffset = math.random() * 5,
+			canMove = nil,
+		})
+	end
+end
+
+
+
+local function visualizeRay(origin, direction, status)
+	local part0 = Instance.new("Part")
+	part0.Anchored = true
+	part0.CanCollide = false
+	part0.Transparency = 1
+	part0.Size = Vector3.new(0.1, 0.1, 0.1)
+	part0.Position = origin
+	part0.Parent = workspace
+
+	local part1 = Instance.new("Part")
+	part1.Anchored = true
+	part1.CanCollide = false
+	part1.Transparency = 1
+	part1.Size = Vector3.new(0.1, 0.1, 0.1)
+	part1.Position = origin + direction
+	part1.Parent = workspace
+
+	local att0 = Instance.new("Attachment", part0)
+	local att1 = Instance.new("Attachment", part1)
+
+	local beam = Instance.new("Beam")
+	beam.Attachment0 = att0
+	beam.Attachment1 = att1
+	beam.FaceCamera = true
+	beam.Width0 = 0.15
+	beam.Width1 = 0.15
+	beam.Color = ColorSequence.new(Color3.fromRGB(255, 0, 0))
+	if status == true then
+		beam.Color = ColorSequence.new(Color3.fromRGB(0, 255, 0))
+	end
+	beam.LightEmission = 1
+	beam.Parent = part0
+	--[[task.delay(0.1, function()
+		part0:Destroy()
+		part1:Destroy()
+	end)
+	]]
+end
+
+
+
+local player = game.Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local root = character:WaitForChild("HumanoidRootPart")
+local RunService = game:GetService("RunService")
+
+local checkRadius = 10
+local freq = 10
+local speed = 1.3
+--local amplitude = 4.5
+local t = 0
+
+
+for plane, data in pairs(bones) do
+	table.sort(data.boneData, function(a, b)
+		return a.bone.Name < b.bone.Name
+	end)
+end
+
+
+local function gerstnerWave(x, z, t, amplitude, wavelength, speed, direction, phaseOffset)
+	local k = (2 * math.pi) / wavelength  -- Wave number
+	local w = speed   -- Angular frequency
+
+	local dotProduct = k * (direction.x * x + direction.z * z) + w * t + phaseOffset
+	local cosWave = math.cos(dotProduct)
+	local sinWave = math.sin(dotProduct)
+
+	-- Horizontal displacement
+	local dispX = amplitude * direction.x * cosWave
+	local dispZ = amplitude * direction.z * cosWave
+
+	-- Vertical displacement (height)
+	local dispY = amplitude * sinWave
+
+	return Vector3.new(dispX, dispY, dispZ)
+end
+
+
+local lastUpdateTime = 0
+local updateDelay = 0.3  -- Delay in seconds before updating
+local lerpSpeed = 0.08
+
+RunService.RenderStepped:Connect(function(dt)
+	--[[
+	local currentTime = tick()
+	if currentTime - lastUpdateTime >= updateDelay then
+		lastUpdateTime = currentTime
+		local targetPos = CFrame.new(root.CFrame.Position.X, ocean:GetPivot().Position.Y, root.CFrame.Position.Z)
+		ocean:PivotTo(ocean:GetPivot():Lerp(targetPos, lerpSpeed))
+	end
+]]
+	
+	local targetPos = CFrame.new(root.CFrame.Position.X, ocean:GetPivot().Position.Y, root.CFrame.Position.Z)
+	ocean:PivotTo(ocean:GetPivot():Lerp(targetPos, 0.01))
+	
+	t += dt
+	
+	for plane, data in pairs(bones) do
+		for i, boneData in ipairs(data.boneData) do
+			if i%2 == 0 then
+				local canMove = boneData.canMove
+				if canMove ~= nil then
+					if canMove == true then
+						local x = boneData.pos.X
+						local z = boneData.pos.Z
+
+						local wave1 = gerstnerWave(x, z, t, boneData.amplitude1, boneData.wavelength1, speed + boneData.speedOffset1, boneData.direction1, boneData.phaseOffset)
+						local wave2 = gerstnerWave(x, z, t, boneData.amplitude2, boneData.wavelength2, speed * 0.6 + boneData.speedOffset2, boneData.direction2, boneData.phaseOffset + 2)
+
+						local combinedWave = wave1 + wave2
+						boneData.bone.Transform = CFrame.new(combinedWave)
+					end
+				else
+					
+					if boneBlockages[boneData.bone]["NumChecks"] < 8 then
+						--[[
+						boneBlockages[boneData.bone]["NumChecks"] += 1
+						local result = game.Workspace:Raycast(boneData.bone.WorldPosition+Vector3.new(0, -50, 0), Vector3.new(0, 75, 0), rayParams)
+						if result then
+							boneBlockages[boneData.bone]["BlockageNum"] += 1
+						end
+						result = game.Workspace:Raycast(boneData.bone.WorldPosition+Vector3.new(checkRadius, -50, 0), Vector3.new(0, 75, 0), rayParams)
+						if result and result.Instance then
+							boneBlockages[boneData.bone]["BlockageNum"] += 1
+						end
+						
+						result = game.Workspace:Raycast(boneData.bone.WorldPosition+Vector3.new(-1*checkRadius, -50, 0), Vector3.new(0, 75, 0), rayParams)
+						if result then
+							boneBlockages[boneData.bone]["BlockageNum"] += 1
+						end
+						
+						result = game.Workspace:Raycast(boneData.bone.WorldPosition+Vector3.new(0, -50, checkRadius), Vector3.new(0, 75, 0), rayParams)
+						if result then
+							boneBlockages[boneData.bone]["BlockageNum"] += 1
+						end
+						
+						result = game.Workspace:Raycast(boneData.bone.WorldPosition+Vector3.new(0, -50, -1*checkRadius), Vector3.new(0, 75, 0), rayParams)
+						if result then
+							boneBlockages[boneData.bone]["BlockageNum"] += 1
+						end
+						]]
+						--[[
+					else
+						
+						if boneBlockages[boneData.bone]["BlockageNum"] >= 4 then
+							boneData.canMove = false
+							boneData.bone.Transform = CFrame.new(0, 0, 0)
+							
+						else
+							boneData.canMove = true
+						end
+						
+						task.delay(20, function()
+							boneData.canMove = nil
+							boneBlockages[boneData.bone]["BlockageNum"] = 0
+							boneBlockages[boneData.bone]["NumChecks"] = 0
+						end)
+						]]
+						boneData.canMove = true
+					end
+				end
+			end
+		end
+	end
+end)
+
+--[[
+							visualizeRay(boneData.bone.WorldPosition + Vector3.new(0, 50, 0), Vector3.new(0, -75, 0), false)
+							visualizeRay(boneData.bone.WorldPosition + Vector3.new(checkRadius, 50, 0), Vector3.new(0, -75, 0), false)
+							visualizeRay(boneData.bone.WorldPosition + Vector3.new(-1*checkRadius, 50, 0), Vector3.new(0, -75, 0), false)
+							visualizeRay(boneData.bone.WorldPosition + Vector3.new(0, 50, checkRadius), Vector3.new(0, -75, 0), false)
+							visualizeRay(boneData.bone.WorldPosition + Vector3.new(0, 50, -1*checkRadius), Vector3.new(0, -75, 0), false)
+							]]
+--[[
+RunService.RenderStepped:Connect(function(dt)
+	t += dt
+	local playerPos = root.Position
+	
+	for plane, data in pairs(bones) do
+		for i, boneData in pairs(data.boneData) do
+			if i%2 == 0 then
+				local canMove = boneData.canMove
+				if canMove ~= nil then
+					if canMove == true then
+						--print("Can move bone"..)
+						--print("Speed Offset: "..tostring(boneData.speedOffset))
+						
+						local x = boneData.bone.WorldPosition.X
+						local z = boneData.bone.WorldPosition.Z
+						--local phaseOffset = (boneData.pos.X + boneData.pos.Z) * 0.1
+						local speedOffset = boneData.speedOffset or 0
+						local phaseOffset = boneData.phaseOffset or 0
+						
+						local y = math.sin(t * (speed+speedOffset) + x * freq + z * freq + phaseOffset) * amplitude
+						boneData.bone.Transform = CFrame.new(0, y, 0)
+					end
+				else
+					if boneBlockages[boneData.bone]["NumChecks"] < 8 then
+						
+						boneBlockages[boneData.bone]["NumChecks"] += 1
+						local result = game.Workspace:Raycast(boneData.bone.WorldPosition+Vector3.new(0, -50, 0), Vector3.new(0, 75, 0), rayParams)
+						
+						if result and result.Instance then
+							--visualizeRay(boneData.pos + Vector3.new(0, 50, 0), Vector3.new(0, -75, 0), false)
+							boneBlockages[boneData.bone]["BlockageNum"] += 1
+							--visualizeRay(boneData.pos + Vector3.new(0, 50, 0), Vector3.new(0, -75, 0), true)
+						end
+					else
+						if boneBlockages[boneData.bone]["BlockageNum"] >= 4 then
+							boneData.canMove = false
+							boneData.bone.Transform = CFrame.new(0, 0, 0)
+							print("can't move")
+							visualizeRay(boneData.bone.WorldPosition + Vector3.new(0, 50, 0), Vector3.new(0, -75, 0), false)
+						else
+							boneData.canMove = true
+						end
+					end
+					
+					
+				end
+				
+			end
+			
+		end
+	end
+end)
+]]
+
+--[[
+local boneDist = (boneData.pos - playerPos).Magnitude
+--print("BoneDist"..tostring(boneDist))
+if boneDist <= maxDistanceBone then
+	local x = boneData.pos.X
+	local z = boneData.pos.Z
+	local y = math.sin(t * speed + x * freq + z * freq) * amplitude
+	boneData.bone.Transform = CFrame.new(0, y, 0)
+else
+	boneData.bone.Transform = CFrame.new(0, 0, 0)
+end
+
+]]
+
+
+--[[
+	for i, bone in pairs(ocean:FindFirstChild("TestPlane1"):GetChildren()) do
+		if bone:IsA("Bone") and i%2 == 0 then
+			local result = game.Workspace:Raycast(bone.WorldPosition+Vector3.new(0, -50, 0), Vector3.new(0, 75, 0), rayParams)
+
+			if not result then
+				local phaseOffset = (bone.WorldPosition.X + bone.WorldPosition.Z) * 0.1
+				local x = bone.WorldPosition.X
+				local z = bone.WorldPosition.Z
+				local y = math.sin(t * (speed) + x * freq + z * freq + phaseOffset) * amplitude
+				bone.Transform = CFrame.new(0, y, 0)
+			end
+			
+			
+		end
+	end
+	]]
