@@ -1,69 +1,94 @@
 local rs = game:GetService("ReplicatedStorage")
-local modScript = require(game:GetService("ServerScriptService").ModuleScript)
-local nenAnimsManager = require(game.ServerScriptService.NenAbilities.NenAbilityAnimationManager)
 
-rs.RemoteEvents.NenAbilities.StartChargeNenEvent.OnServerEvent:Connect(function(player, bool)
-	local checks = modScript.checkAll(player)
-	if checks == false or player.Character:GetAttribute("Busy") == true then return end
-	
-	local anims = nenAnimsManager:GetAnimations(player.Character)
-	anims.chargeNenClip:Play()
-	
-	modScript.yieldAllBut(player.Character, "ChargeNenAnim")
-	player.Character:SetAttribute("Charging", true)
-	player.Character:SetAttribute("Busy", true)
-	player.Character.Humanoid.WalkSpeed = 0
-	player.Character.Humanoid.JumpHeight = 0
-	
-	for _, v in pairs(player.Character:GetChildren()) do
-		if v.Name == "Right Arm" or v.Name == "Left Arm" or v.Name == "Torso" or v.Name == "Right Leg" or v.Name == "Left Leg" then
-			for _, emitter in pairs(rs.VFX.NenVFX.HXH.victimv3[v.Name]:GetChildren()) do
-				local vfx = emitter:Clone()
-				vfx.Parent = v
-				vfx.Name = "NenAuraToDelete"
-			end
-			
-		elseif v.Name == "Head" then
-			local vfx = rs.VFX.NenVFX.HXH.victimv3["Head"].Part:Clone()
-			vfx.Parent = v
-			vfx.Name = "NenAuraToDelete"
-		end
-	end
-end)
+local AnimationManager = {}
 
-rs.RemoteEvents.NenAbilities.ChargeNenEvent.OnServerEvent:Connect(function(player, bool)
-	if player.Character:GetAttribute("Stunned") == true or player.Character:GetAttribute("Charging") == false then
-		bool = false
+local cache = {}
+
+
+--Nen
+local chargeNenAnim = rs.NenAbilities.Killua.KilluaAnims.ChargeNenAnim
+local holdChargeNenAnim = rs.NenAbilities.Killua.KilluaAnims.HoldChargeNenAnim
+
+--Kite
+local barragePoseAnim = rs.NenAbilities.Kite.KiteAnims.barragePose
+local barrageAnim = rs.NenAbilities.Kite.KiteAnims.barrageAnim
+local scytheSwingAnim1 = rs.NenAbilities.Kite.KiteAnims["scytheM1 (1)"]
+local scytheSwingAnim2 = rs.NenAbilities.Kite.KiteAnims["scytheM1 (2)"]
+local scytheSwingAnim3 = rs.NenAbilities.Kite.KiteAnims["scytheM1 (3)"]
+local scytheSwingAnim4 = rs.NenAbilities.Kite.KiteAnims["scytheM1 (4)"]
+local scytheSwingAnim5 = rs.NenAbilities.Kite.KiteAnims["scytheM1 (5)"]
+local scytheDash = rs.NenAbilities.Kite.KiteAnims.scytheDash
+
+--Gon
+local rockAnim = rs.NenAbilities.Gon.GonAnims.RockAnim
+local paperAnim = rs.NenAbilities.Gon.GonAnims.PaperAnim
+local scissorAnim = rs.NenAbilities.Gon.GonAnims.ScissorAnim
+
+--Killua
+local thunderboltAnim = rs.NenAbilities.Killua.KilluaAnims.Thunderbolt
+local thunderboltAnim2 = rs.NenAbilities.Killua.KilluaAnims["Thunderbolt(2)"]
+local palmChargeAnim = rs.NenAbilities.Killua.KilluaAnims.PalmChargeUp
+local palmRushAnim = rs.NenAbilities.Killua.KilluaAnims.PalmRush
+local thunderComboAnim = rs.NenAbilities.Killua.KilluaAnims.thunderCombo
+local thunderHurtAnim = rs.NenAbilities.Killua.KilluaAnims.thunderHurt
+local godspeedTransformationAnim = rs.NenAbilities.Killua.KilluaAnims.GodspeedTransformationAnim
+
+--Nobunaga
+local counterAnim = rs.NenAbilities.Nobunaga.NobunagaAnims.counterAnim
+local counterFinishAnim = rs.NenAbilities.Nobunaga.NobunagaAnims.counterFinishAnim
+
+
+
+function AnimationManager:GetAnimations(character)
+	
+	if cache[character] then
+		return cache[character]
 	end
+	local humanoid = character:WaitForChild("Humanoid")
+	local animator = humanoid:WaitForChild("Animator")
 	
-	if bool==true then
-		local maxNen = 100+player.Stats.Nen.Value
-		local nenIncrement = math.floor((maxNen/50) * 10 + 0.5) / 10
-		if player.Character:GetAttribute("Nen") + 2 < (maxNen) then
-			player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")+nenIncrement)
-		else
-			player.Character:SetAttribute("Nen", maxNen)
-		end
-		rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, 1)
-	else
+
 	
-		player.Character:SetAttribute("Busy", false)
-		player.Character:SetAttribute("Charging", false)
-		player.Character.Humanoid.WalkSpeed = player.Character:GetAttribute("Speed") + player.Character:GetAttribute("SpeedBuff")
-		player.Character.Humanoid.JumpHeight = 7.2
+	local clips = {
+		chargeNenClip = animator:LoadAnimation(chargeNenAnim),
+		holdChargeNenClip = animator:LoadAnimation(holdChargeNenAnim),
 		
-		for _, stuff in pairs(player.Character:GetDescendants()) do
-			if stuff.Name == "NenAuraToDelete" then
-				stuff:Destroy()
-			end
-		end
+		barragePoseClip = animator:LoadAnimation(barragePoseAnim),
+		barrageClip = animator:LoadAnimation(barrageAnim),
+		scytheClip1 = animator:LoadAnimation(scytheSwingAnim1),
+		scytheClip2 = animator:LoadAnimation(scytheSwingAnim2),
+		scytheClip3 = animator:LoadAnimation(scytheSwingAnim3),
+		scytheClip4 = animator:LoadAnimation(scytheSwingAnim4),
+		scytheClip5 = animator:LoadAnimation(scytheSwingAnim5),
+		scytheDashClip = animator:LoadAnimation(scytheDash),
 		
-		local anims = nenAnimsManager:GetAnimations(player.Character)
-		anims.chargeNenClip:Stop()
-	end
-end)
+		rockClip = animator:LoadAnimation(rockAnim),
+		paperClip = animator:LoadAnimation(paperAnim),
+		scissorClip = animator:LoadAnimation(scissorAnim),
+		
+		thunderboltClip = animator:LoadAnimation(thunderboltAnim),
+		thunderboltClip2 = animator:LoadAnimation(thunderboltAnim2),
+		palmChargeClip = animator:LoadAnimation(palmChargeAnim),
+		palmRushClip = animator:LoadAnimation(palmRushAnim),
+		thunderComboClip = animator:LoadAnimation(thunderComboAnim),
+		thunderHurtClip = animator:LoadAnimation(thunderHurtAnim),
+		godspeedTransformationClip = animator:LoadAnimation(godspeedTransformationAnim),
+		
+		counterClip = animator:LoadAnimation(counterAnim),
+		counterFinishClip = animator:LoadAnimation(counterFinishAnim),
+	}	
+	
+	
+
+	cache[character] = clips
+	return clips
+
+end
 
 
-rs.RemoteEvents.NenAbilities.ChangeHatsuEvent.OnServerEvent:Connect(function(player, hatsu)
-	player.Character:SetAttribute("NenAbility", hatsu)
-end)
+
+function AnimationManager:ClearCache(character)
+	cache[character] = nil
+end
+
+return AnimationManager
