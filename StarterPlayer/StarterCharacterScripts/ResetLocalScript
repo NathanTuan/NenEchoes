@@ -1,0 +1,23 @@
+local player = game.Players.LocalPlayer
+local rs = game:GetService("ReplicatedStorage")
+local starterGui = game:GetService("StarterGui")
+
+
+
+while true do
+	local success = pcall(function()
+		starterGui:SetCore("ResetButtonCallback", rs.RemoteEvents.CombatEvents.DeathBindableEvent)
+	end)
+
+	if success then
+		break
+	end
+
+	task.wait()
+end
+
+
+
+rs.RemoteEvents.CombatEvents.DeathBindableEvent.Event:Connect(function()
+	rs.RemoteEvents.CombatEvents.DeathEvent:FireServer()
+end)
