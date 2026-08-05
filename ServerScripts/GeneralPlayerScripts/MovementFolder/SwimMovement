@@ -1,0 +1,182 @@
+local players = game:GetService("Players")
+local rs = game:GetService("ReplicatedStorage")
+local GameModules = require(rs.GameModules)
+local GeneralModule = GameModules.GeneralModule
+local cdManager = GameModules.CooldownManagerModule
+local tweenService = game:GetService("TweenService")
+local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut)
+
+local moveEvent = rs.RemoteEvents.MovementEvents.MoveEndEvent
+local sprintEvent = rs.RemoteEvents.MovementEvents.sprintEvent
+
+
+local movementManager = require(script.Parent.movementAnimsModule)
+
+-- Import the modular animation system
+local AnimationSystem = require(script.Parent.MovementModule)
+local AnimationSelector = AnimationSystem.AnimationSelector
+
+
+local swimEvent = rs.RemoteEvents.MovementEvents.SwimEvent
+local swimMoveEvent = rs.RemoteEvents.MovementEvents.SwimMoveEvent
+local swimmingIdleAnim = rs:WaitForChild("Animations").MovementAnims.GeneralMovementAnims.SwimmingIdleAnim
+local swimmingAnim = rs:WaitForChild("Animations").MovementAnims.GeneralMovementAnims.SwimmingAnim
+local swimmingUpAnim = rs:WaitForChild("Animations").MovementAnims.GeneralMovementAnims.SwimmingUpAnim
+local swimmingDownAnim = rs:WaitForChild("Animations").MovementAnims.GeneralMovementAnims.SwimmingDownAnim
+
+swimEvent.OnServerEvent:Connect(function(player, isSwimming)
+	local character = player.Character
+	if not character then return end
+
+	local humanoid = character:WaitForChild("Humanoid")
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+
+	if isSwimming then
+		character:SetAttribute("Swimming", true)
+		humanoid.WalkSpeed = 0
+
+		local bodyVelocity = hrp:FindFirstChild("SwimVelocity")
+		if not bodyVelocity then
+			bodyVelocity = Instance.new("BodyVelocity")
+			bodyVelocity.Name = "SwimVelocity"
+			bodyVelocity.MaxForce = Vector3.new(math.huge, math.huge, math.huge)
+			bodyVelocity.P = 10000
+			bodyVelocity.Parent = hrp
+		end
+		
+		
+		for _, v in pairs(player.Character:GetChildren()) do
+			if v.Name == "Right Arm" or v.Name == "Left Arm" or v.Name == "Right Leg" or v.Name == "Left Leg" then
+				local swimVFX = v:FindFirstChild("SwimmingTrail")
+				if not swimVFX then
+					swimVFX = rs.VFX.AtmosphereVFX.SwimmingTrail:Clone()
+					swimVFX.Parent = v
+					swimVFX.CFrame = v.CFrame
+					swimVFX.Motor6D.Part0 = v
+					swimVFX.Motor6D.C1 = CFrame.new(0, v.Size.Y/2, 0)
+				end
+
+			end
+		end
+		local breathingBubbleVFX = player.Character.Head:FindFirstChild("breathingBubbleVFX")
+		if not breathingBubbleVFX then
+			breathingBubbleVFX = rs.VFX.AtmosphereVFX.breathingBubbleVFX:Clone()
+			breathingBubbleVFX.Parent = player.Character.Head
+			breathingBubbleVFX.CFrame = player.Character.Head.CFrame
+			breathingBubbleVFX.Motor6D.Part0 = player.Character.Head
+			breathingBubbleVFX.Motor6D.C1 = CFrame.new(0, 0, player.Character.Head.Size.Z/2)
+		end
+		
+	else
+		character:SetAttribute("Swimming", false)
+		humanoid.WalkSpeed = character:GetAttribute("Speed") + GeneralModule.getSpeedBuffs(character) 
+
+		local bodyVelocity = hrp:FindFirstChild("SwimVelocity")
+		if bodyVelocity then
+			bodyVelocity:Destroy()
+		end
+		
+		
+		for _, v in pairs(player.Character:GetChildren()) do
+			if v.Name == "Right Arm" or v.Name == "Left Arm" or v.Name == "Right Leg" or v.Name == "Left Leg" then
+				local swimVFX = v:FindFirstChild("SwimmingTrail")
+				if swimVFX then
+					swimVFX:Destroy()
+				end
+
+			end
+		end
+		local breathingBubbleVFX = player.Character.Head:FindFirstChild("breathingBubbleVFX")
+		if breathingBubbleVFX then
+			breathingBubbleVFX:Destroy()
+		end
+	end
+	
+	rs.RemoteEvents.MovementEvents.MoveEndEvent:FireClient(player)
+end)
+
+local yieldAllPlay = function(character, anim)
+	local found = false
+	local hum = character.Humanoid
+	for i, v in pairs(hum.Animator:GetPlayingAnimationTracks()) do
+		if v.Name == anim.Name then
+			found = true
+		else
+			v:Stop()
+		end
+	end
+	
+	if found == false then
+		local clip = hum.Animator:LoadAnimation(anim)
+		clip.Looped = true
+		clip.Priority = Enum.AnimationPriority.Movement
+		clip:Play()
+	end
+end
+
+swimMoveEvent.OnServerEvent:Connect(function(player, dir)
+	local character = player.Character
+	if not character or not character:GetAttribute("Swimming") then return end
+
+	local hrp = character:FindFirstChild("HumanoidRootPart")
+	if not hrp then return end
+
+	local bodyVelocity = hrp:FindFirstChild("SwimVelocity")
+
+	local moveDirection = Vector3.zero
+
+	-- Remove vertical input for horizontal movement checks
+	local horizontalDir = dir:gsub("up", ""):gsub("down", "")
+
+	-- Horizontal movement
+	if horizontalDir == "w" then
+		moveDirection = hrp.CFrame.LookVector
+	elseif horizontalDir == "a" then
+		moveDirection = hrp.CFrame.RightVector * -1
+	elseif horizontalDir == "d" then
+		moveDirection = hrp.CFrame.RightVector
+	elseif horizontalDir == "s" then
+		moveDirection = hrp.CFrame.LookVector * -1
+	elseif horizontalDir == "aw" then
+		moveDirection = (hrp.CFrame.LookVector + hrp.CFrame.RightVector * -1).Unit
+	elseif horizontalDir == "dw" then
+		moveDirection = (hrp.CFrame.LookVector + hrp.CFrame.RightVector).Unit
+	elseif horizontalDir == "as" then
+		moveDirection = (hrp.CFrame.LookVector * -1 + hrp.CFrame.RightVector * -1).Unit
+	elseif horizontalDir == "ds" then
+		moveDirection = (hrp.CFrame.LookVector * -1 + hrp.CFrame.RightVector).Unit
+	end
+
+	local hasHorizontal = horizontalDir ~= ""
+	local hasVertical = dir:find("up") or dir:find("down")
+
+	-- Vertical movement
+	if dir:find("up") then
+		moveDirection += Vector3.new(0, 1, 0)
+	elseif dir:find("down") then
+		moveDirection += Vector3.new(0, -1, 0)
+	end
+
+	if moveDirection.Magnitude > 0 then
+		moveDirection = moveDirection.Unit
+	end
+
+	if bodyVelocity then
+		bodyVelocity.Velocity = moveDirection * 25
+	end
+
+	-- Animation handling
+	if hasVertical then
+		if dir:find("up") then
+			yieldAllPlay(character, swimmingUpAnim)
+		elseif dir:find("down") then
+			yieldAllPlay(character, swimmingDownAnim)
+		end
+	else
+		if hasHorizontal then
+			yieldAllPlay(character, swimmingAnim)
+		else
+			yieldAllPlay(character, swimmingIdleAnim)
+		end
+	end
+end)
