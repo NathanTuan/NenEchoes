@@ -1,0 +1,263 @@
+local uis = game:GetService("UserInputService")
+local player = game:GetService("Players").LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local hrp = character:WaitForChild("HumanoidRootPart")
+
+local rs = game:GetService("ReplicatedStorage")
+local moveEvent = rs.RemoteEvents.MovementEvents.MoveEndEvent
+local sprintEvent = rs.RemoteEvents.MovementEvents.sprintEvent
+local blockEvent = rs.RemoteEvents.CombatEvents.BlockEvent
+local jumpEvent = rs.RemoteEvents.MovementEvents.JumpEvent
+local swimEvent = rs.RemoteEvents.MovementEvents.SwimEvent
+local swimMoveEvent = rs.RemoteEvents.MovementEvents.SwimMoveEvent
+
+-- Movement state tracking
+local m1Active = false
+local db = false
+local wCount = 0
+local curW = false
+local curA = false
+local curS = false
+local curD = false
+local curSpace = false
+local curCtrl = false
+local blockCD = false
+local chargedb = false
+local holdingSpace = false
+local netD = ""
+
+local charging = false
+local lastSpacePress = 0
+local sprinting = false
+local lastWPress = 0
+local doubleTapTime = 0.7
+
+local function check()
+	if curW == true and curA ~= true and curD ~= true and curS ~= true then
+		netD = "w"
+	elseif curA == true and curD~= true then
+		netD = "a"
+	elseif curD == true and curA ~= true then
+		netD = "d"
+	elseif curS == true and curW ~= true and curA~= true and curD ~= true then
+		netD = "s"
+	elseif curW == true and curA == true and curD == true and curS ~= true then
+		netD = "w"
+	else
+		netD = ""
+	end
+end
+
+local function swimCheck()
+	if curW == true and curA ~= true and curD ~= true and curS ~= true then
+		netD = "w"
+	elseif curA == true and curD~= true and curW ~= true and curS ~= true then
+		netD = "a"
+	elseif curD == true and curA ~= true and curW ~= true and curS ~= true then
+		netD = "d"
+	elseif curS == true and curW ~= true and curA~= true and curD ~= true then
+		netD = "s"
+	elseif curW == true and curA == true and curD == true and curS ~= true then
+		netD = "w"
+	elseif curA == true and curW == true and curD~= true and curS ~= true then
+		netD = "aw"
+	elseif curD == true and curW == true and curA~= true and curS ~= true then
+		netD = "dw"
+	elseif curA == true and curS == true and curD~= true and curW ~= true then
+		netD = "as"
+	elseif curD == true and curS == true and curA~= true and curW ~= true then
+		netD = "ds"
+	elseif curW == false and curA == false and curD == false and curS == false then
+		netD = ""
+	end
+
+	if curSpace then
+		netD = netD .. "up"
+	elseif curCtrl then
+		netD = netD .. "down"
+	end
+	--print(netD)
+end
+
+local function updateDirection()
+	if character:GetAttribute("Swimming") == true then
+		swimCheck()
+		swimMoveEvent:FireServer(netD)
+	else
+		check()
+		moveEvent:FireServer(netD)
+	end
+end
+
+uis.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+
+	if input.KeyCode == Enum.KeyCode.W then
+		curW = true
+
+		local currentTime = tick() 
+		if currentTime - lastWPress <= doubleTapTime then
+			sprintEvent:FireServer(true)
+		else
+			lastWPress = currentTime 
+		end
+
+		updateDirection()
+	end
+
+	if input.KeyCode == Enum.KeyCode.A then
+		curA = true
+		updateDirection()
+	end
+
+	if input.KeyCode == Enum.KeyCode.D then
+		curD = true
+		updateDirection()
+	end
+
+	if input.KeyCode == Enum.KeyCode.S then
+		curS = true
+		updateDirection()
+	end
+
+	if input.KeyCode == Enum.KeyCode.F then
+		if blockCD == false then
+			blockEvent:FireServer()
+			blockCD = true
+			task.spawn(function()
+				task.wait(2)
+				blockCD = false
+			end)
+		end
+	end
+
+	if input.KeyCode == Enum.KeyCode.R then
+		if charging == -1 and chargedb == false then
+			rs.RemoteEvents.NenAbilities.StartChargeNenEvent:FireServer(true)
+			chargedb = true
+			charging = 0
+			task.spawn(function()
+				task.wait(0.5)
+				chargedb = false
+				task.wait(0.3)
+				if charging == 0 then
+					charging = 1
+				end
+			end)
+			
+		end
+
+		while charging ~= -1 do
+			if charging == 0 then
+				rs.RemoteEvents.NenAbilities.ChargeNenEvent:FireServer(true, 0)
+			elseif charging == 1 then
+				rs.RemoteEvents.NenAbilities.ChargeNenEvent:FireServer(true, 1)
+			end
+			
+			task.wait(0.1)
+		end
+	end
+
+	if input.KeyCode == Enum.KeyCode.Space then
+		if character:GetAttribute("Swimming") == true then
+			curSpace = true
+			swimCheck()
+			swimMoveEvent:FireServer(netD)
+		end
+
+		holdingSpace = true
+		task.spawn(function()
+			while holdingSpace do
+				task.wait(0.1)
+				if character:GetAttribute("Attacking") == true then
+					rs.RemoteEvents.CombatEvents.AirtiltEvent:FireServer()
+				end
+			end
+		end)
+
+		local currentTime = tick()
+		if currentTime - lastSpacePress <= doubleTapTime then
+			if character:GetAttribute("Attacking") == true then
+				rs.RemoteEvents.CombatEvents.AirtiltEvent:FireServer()
+			else
+				rs.RemoteEvents.MovementEvents.ClimbEvent:FireServer()
+			end
+		else
+			lastSpacePress = currentTime 
+		end
+	end
+
+	if input.KeyCode == Enum.KeyCode.LeftControl then
+		if character:GetAttribute("Swimming") == true then
+			curCtrl = true
+			swimCheck()
+			swimMoveEvent:FireServer(netD)
+		end
+	end
+
+	if input.KeyCode == Enum.KeyCode.E and character:GetAttribute("Driving") == true then
+		rs.RemoteEvents.MovementEvents.BoatFlyEvent:FireServer("Up")
+	end
+end)
+
+uis.InputEnded:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+
+	if input.KeyCode == Enum.KeyCode.W then
+		curW = false
+		if character:GetAttribute("Sprinting") == true then
+			sprintEvent:FireServer(false)
+		end
+		updateDirection()
+	end
+
+	if input.KeyCode == Enum.KeyCode.A then
+		curA = false
+		updateDirection()
+	end
+
+	if input.KeyCode == Enum.KeyCode.D then
+		curD = false
+		updateDirection()
+	end
+
+	if input.KeyCode == Enum.KeyCode.S then
+		curS = false
+		updateDirection()
+	end
+
+	if input.KeyCode == Enum.KeyCode.F then
+		rs.RemoteEvents.CombatEvents.UnblockEvent:FireServer()
+	end
+
+	if input.KeyCode == Enum.KeyCode.R then
+		charging = -1
+		rs.RemoteEvents.NenAbilities.ChargeNenEvent:FireServer(false)
+	end
+
+	if input.KeyCode == Enum.KeyCode.Space then
+		holdingSpace = false
+		curSpace = false
+		if character:GetAttribute("Swimming") == true then
+			swimCheck()
+			swimMoveEvent:FireServer(netD)
+		end
+	end
+
+	if input.KeyCode == Enum.KeyCode.LeftControl then
+		curCtrl = false
+		if character:GetAttribute("Swimming") == true then
+			swimCheck()
+			swimMoveEvent:FireServer(netD)
+		end
+	end
+
+	if input.KeyCode == Enum.KeyCode.E and character:GetAttribute("Driving") == true then
+		rs.RemoteEvents.MovementEvents.BoatFlyEvent:FireServer(player, "")
+	end
+end)
+
+rs.RemoteEvents.MovementEvents.MoveEndEvent.OnClientEvent:Connect(function()
+	updateDirection()
+end)
