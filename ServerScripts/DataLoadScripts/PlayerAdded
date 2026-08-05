@@ -3,29 +3,32 @@ local dataStore = game:GetService("DataStoreService")
 local playerDataStore = dataStore:GetDataStore("PlayerData")
 local rs = game:GetService("ReplicatedStorage")
 local ss = game:GetService("ServerStorage")
-local cdManager = require(game.ReplicatedStorage.CooldownManager)
+local GameModules = require(rs.GameModules)
+local cdManager = GameModules.CooldownManagerModule
 local movementManager = require(game.ServerScriptService.GeneralPlayerScripts.Movement.movementAnimsModule)
+local ragdollModule = GameModules.RagdollModule
+local modScript = GameModules.GeneralModule
 
 local collectionService = game:GetService("CollectionService")
-
 local PhysicsService = game:GetService("PhysicsService")
 local Players = game:GetService("Players")
 
 local CollisionGroupName = "TempNoCollide"
+local NormalGroupName = "NormalPlayerCollide"
 PhysicsService:RegisterCollisionGroup(CollisionGroupName)
---PhysicsService:RegisterCollisionGroup("Ocean")
-PhysicsService:CollisionGroupSetCollidable(CollisionGroupName, CollisionGroupName, false)
---PhysicsService:CollisionGroupSetCollidable(CollisionGroupName, "Ocean", false)
+PhysicsService:RegisterCollisionGroup(NormalGroupName)
+PhysicsService:CollisionGroupSetCollidable(CollisionGroupName, NormalGroupName, false)
 
 
-local function setCollisionGroup(model)
+
+
+local function setCollisionGroup(model, groupName)
 	for _, descendant in model:GetDescendants() do
 		if descendant:IsA("BasePart") or descendant:IsA("MeshPart") then
-			descendant.CollisionGroup = CollisionGroupName
+			descendant.CollisionGroup = groupName
 		end
 	end
 end
-
 
 
 
@@ -40,14 +43,14 @@ for _, obj in ipairs(collectionService:GetTagged("Dummy")) do
 end
 
 local gameStartTable = {}
-local hairArray = ss.Outfits.Hairs:GetChildren()
-local shirtArray = ss.Outfits.Shirts:GetChildren()
-local sleevesArray = ss.Outfits.Sleeves:GetChildren()
-local pantsArray = ss.Outfits.Pants:GetChildren()
-local shoesArray = ss.Outfits.Shoes:GetChildren()
-local eyesArray  = ss.Outfits.Eyes:GetChildren()
-local nosesArray = ss.Outfits.Noses:GetChildren()
-local mouthsArray = ss.Outfits.Mouths:GetChildren()
+local hairArray = rs.Outfits.Hairs:GetChildren()
+local shirtArray = rs.Outfits.Shirts:GetChildren()
+local sleevesArray = rs.Outfits.Sleeves:GetChildren()
+local pantsArray = rs.Outfits.Pants:GetChildren()
+local shoesArray = rs.Outfits.Shoes:GetChildren()
+local eyesArray  = rs.Outfits.Eyes:GetChildren()
+local nosesArray = rs.Outfits.Noses:GetChildren()
+local mouthsArray = rs.Outfits.Mouths:GetChildren()
 function updateClothes(player)	
 	for _, v in pairs(player.Character:WaitForChild("Clothes"):GetChildren()) do
 		--print(v.Name)
@@ -131,7 +134,30 @@ function updateClothes(player)
 
 end
 
+function updateClothesColors(player, hairColor, shirtColor, sleeveColor, pantsColor, shoeColor)
+	--print("Should color")
 
+	local char = player.Character
+
+	char.Clothes["Head"].Color = hairColor
+	char.Clothes["Torso"].Color = shirtColor
+	char.Clothes["Right Arm"].Color = sleeveColor
+	char.Clothes["Left Arm"].Color = sleeveColor
+	char.Clothes["Right Leg"].Color = pantsColor
+	char.Clothes["Left Leg"].Color = pantsColor
+	char.Clothes["Right Shoe"].Color = shoeColor
+	char.Clothes["Left Shoe"].Color = shoeColor
+
+
+	player.ClothesIDs.HairColor.Value = hairColor
+	player.ClothesIDs.ShirtColor.Value = shirtColor
+	player.ClothesIDs.SleevesColor.Value = sleeveColor
+	player.ClothesIDs.PantsColor.Value = pantsColor
+	player.ClothesIDs.ShoesColor.Value = shoeColor
+end
+
+
+players.CharacterAutoLoads = false 
 players.PlayerAdded:Connect(function(player)
 	
 	local folder = Instance.new("Folder")
@@ -140,39 +166,59 @@ players.PlayerAdded:Connect(function(player)
 	
 	cdManager.InitPlayer(player)
 	
+
 	player.CharacterAdded:Connect(function(character)
 		
+		
+		--Player Attributes
 		character:SetAttribute("Nen", 100)
 		character:SetAttribute("Speed", 16)
-		character:SetAttribute("Stunned", false)
-		character:SetAttribute("StunnedTime", 0)
-		character:SetAttribute("Combo", 1)
-		character:SetAttribute("Cooldown", false)
+		
+		--Movement States
 		character:SetAttribute("Sprinting", false)
 		character:SetAttribute("NetDirection", "")
-		character:SetAttribute("TotalDamage", 0)
-		character:SetAttribute("MeterWaitTime", 0)
+		character:SetAttribute("Dashing", false)
+		character:SetAttribute("Driving", false)
+		character:SetAttribute("Swimming", false)
+		
+		--Status Effect States
+		character:SetAttribute("Stunned", false)
+		character:SetAttribute("StunnedTime", 0)
+		character:SetAttribute("Invincible", false)
+		character:SetAttribute("Incapacitated", false)
+		character:SetAttribute("InCombat", false)
+		character:SetAttribute("InCombatTime", 0)
+		character:SetAttribute("Ragdolled", false)
+		character:SetAttribute("RagdollTime", 0)
+		character:SetAttribute("Busy", false)
+		character:SetAttribute("AbilityBlocked", false)
+		character:SetAttribute("MovementBlocked", false)
+		character:SetAttribute("Hyperarmor", false)
+		
+		--Combat
+		character:SetAttribute("Combo", 1)
+		character:SetAttribute("Cooldown", false)
 		character:SetAttribute("Blocking", false)
 		character:SetAttribute("Attacking", false)
 		character:SetAttribute("AttackingTime", 0)
+		character:SetAttribute("M1Activated", false)
+		character:SetAttribute("Parrying", false)
+		character:SetAttribute("Airtilting", -1)
 		character:SetAttribute("WeaponOut", false)
 		character:SetAttribute("Weapon", "")
-		character:SetAttribute("M1Activated", false)
-		character:SetAttribute("Dashing", false)
-		character:SetAttribute("Ragdolled", false)
-		character:SetAttribute("NenAbility", "Killua")
-		character:SetAttribute("AbilityEnabled", false)
-		character:SetAttribute("SpeedBuff", 0)
-		character:SetAttribute("RagdollTime", 0)
-		character:SetAttribute("GodSpeed", false)
-		character:SetAttribute("StartUp", false)
-		character:SetAttribute("Busy", false)
-		character:SetAttribute("Parrying", false)
-		character:SetAttribute("Hyperarmor", false)
+		
+		--Miscallaneous
 		character:SetAttribute("Charging", false)
 		character:SetAttribute("HeadOut", false)
-		character:SetAttribute("Airtilting", -1)
-		character:SetAttribute("Driving", false)
+		character:SetAttribute("NenAbility", "Killua")
+		character:SetAttribute("AbilityEnabled", false)
+		character:SetAttribute("GodSpeed", false)
+		character:SetAttribute("StartUp", false) --Nen Charge i think
+		character:SetAttribute("MouseLocked", false)
+		
+		--UI Damage Meter
+		character:SetAttribute("TotalDamage", 0)
+		character:SetAttribute("MeterWaitTime", 0)
 		
 		
 		local clothesFolder = Instance.new("Folder")
@@ -184,41 +230,93 @@ players.PlayerAdded:Connect(function(player)
 		att.Name = "dashAtt"
 		
 		
-		
 		if game.Workspace.Summons[player.Name] then
 			for _, v in pairs(game.Workspace.Summons[player.Name]:GetChildren()) do
 				v:Destroy()
 			end
 		end	
 		
-		local attempts, maxAttempts = 1, 4
-		while attempts < maxAttempts and not gameStartTable[player] do
-			--print("Trying")
-			attempts = attempts + 1
-			task.wait(1*attempts)
-		end
-		
-		for _, descendant in character:GetDescendants() do
-			if descendant:IsA("BasePart") then
-				descendant.CollisionGroup = "TempNoCollide"
+		task.spawn(function()
+			local attempts, maxAttempts = 1, 4
+			while attempts < maxAttempts and not gameStartTable[player] do
+				--print("Trying")
+				attempts = attempts + 1
+				task.wait(1*attempts)
 			end
-		end
-	
+			if gameStartTable[player] then
+				task.spawn(function()
+					--print("Updating clothes")
+					updateClothes(player)
+					task.wait(0.5)
+					updateClothesColors(player, player.ClothesIDs.HairColor.Value, player.ClothesIDs.ShirtColor.Value, player.ClothesIDs.SleevesColor.Value, player.ClothesIDs.PantsColor.Value, player.ClothesIDs.ShoesColor.Value)
+					task.wait(2)
+					updateClothesColors(player, player.ClothesIDs.HairColor.Value, player.ClothesIDs.ShirtColor.Value, player.ClothesIDs.SleevesColor.Value, player.ClothesIDs.PantsColor.Value, player.ClothesIDs.ShoesColor.Value)
+				end)
+				
+				local bool = PhysicsService:IsCollisionGroupRegistered("TempNoCollide")
+				while not bool do
+					bool = PhysicsService:IsCollisionGroupRegistered("TempNoCollide")
+					task.wait(1)
+					print("Waiting for group tempnocollide")
+				end
+				setCollisionGroup(character, "NormalPlayerCollide")
+				
+				local hum = character:WaitForChild("Humanoid")
+				task.wait(1)
+				hum.MaxHealth = 100 + player.Stats.Health.Value
+				hum.Health = hum.MaxHealth
+				character:SetAttribute("Nen", 100+player.Stats.Nen.Value)	
+				rs.StatRemoteEvents.CharacterAddedEvent:FireClient(player)
+			end
+		end)
+		
+		
+		
+		
+		
+		local conn
+		local hum = character:WaitForChild("Humanoid")
+		hum:SetStateEnabled(Enum.HumanoidStateType.Dead, false)
+		conn = hum.HealthChanged:Connect(function(health)
+			
+			if character:GetAttribute("Incapacitated") == true then return end
+			--print("newHealth: "..tostring(health))
+			if health <= 0 then
+				print("KnockedTHing")
+				character:SetAttribute("Incapacitated", true)
+				character:SetAttribute("Invincible", true)
 
-		if gameStartTable[player] then
-			updateClothes(player)
+				-- Ragdoll and knockback
+				ragdollModule:Ragdoll(character, 10)
+				modScript.knockback(character, character, -5)
 
-			local hum = character:WaitForChild("Humanoid")
-			task.wait(1)
-			hum.MaxHealth = 100 + player.Stats.Health.Value
-			hum.Health = hum.MaxHealth
-			character:SetAttribute("Nen", 100+player.Stats.Nen.Value)	
-			rs.StatRemoteEvents.CharacterAddedEvent:FireClient(player)
-		end
+				-- Create timer UI
+				local timer = rs.UIObjects.KnockedTimer:Clone()
+				timer.Name = "IncapacitatedTimer"
+				timer.Parent = character.Torso
+				timer.Adornee = character.Torso
+
+				-- 10 second countdown
+				for i = 10, 1, -1 do
+					timer.TextLabel.Text = i
+					task.wait(1)
+				end
+
+				-- Recovery
+				timer:Destroy()
+				hum:ChangeState(Enum.HumanoidStateType.GettingUp)
+				hum.Health = hum.MaxHealth
+				character:SetAttribute("Incapacitated", false)
+				task.wait(1)
+				character:SetAttribute("Invincible", false)
+				
+			end
+			
+		end)
 		
 	end)
 
-
+	player:LoadCharacterAsync()
 end)
 
 
@@ -237,36 +335,6 @@ end)
 
 
 rs.StatRemoteEvents.ClientLoadEvent.OnServerEvent:Connect(function(player)
-	print("Loaded")
+	--print("Loaded")
 	gameStartTable[player] = true
 end)
---[[
-local outfitFolderTop = rs.Outfits["Outfit"..tostring(player.Clothes.ShirtNum.Value).."View"]
-		local outfitFolderBottom = rs.Outfits["Outfit"..tostring(player.Clothes.PantsNum.Value).."View"]
-
-		for _, bodyPart in pairs(character:GetChildren()) do
-			if (bodyPart.Name == "Torso" or bodyPart.Name == "Left Arm" or bodyPart.Name == "Right Arm" 
-					or bodyPart.Name == "Head") then
-
-				local clothingMesh = outfitFolderTop:FindFirstChild(bodyPart.Name)
-				if clothingMesh then
-					local part = clothingMesh:Clone()
-					part.Anchored = false
-					part.CanCollide = false
-					part.Parent = character.Clothes
-					part:PivotTo(bodyPart.CFrame * CFrame.Angles(0, math.rad(180), 0))
-					part.WeldConstraint.Part0 = bodyPart
-				end
-			elseif (bodyPart.Name == "Left Leg" or bodyPart.Name == "Right Leg") then
-				local clothingMesh = outfitFolderBottom:FindFirstChild(bodyPart.Name)
-				if clothingMesh then
-					local part = clothingMesh:Clone()
-					part.Anchored = false
-					part.CanCollide = false
-					part.Parent = character.Clothes
-					part:PivotTo(bodyPart.CFrame * CFrame.Angles(0, math.rad(180), 0))
-					part.WeldConstraint.Part0 = bodyPart
-				end
-			end
-		end
-]]
