@@ -4,14 +4,18 @@ local AnimationManager = {}
 
 local cache = {} 
 
-local m1Folder = rs:WaitForChild("M1Anims")
+local m1Folder = rs:WaitForChild("Animations"):WaitForChild("M1Anims")
 local M1_1Anim = m1Folder:WaitForChild("M1 1")
 local M1_2Anim = m1Folder:WaitForChild("M1 2")
 local M1_3Anim = m1Folder:WaitForChild("M1 3")
 local M1_4Anim = m1Folder:WaitForChild("M1 4")
 local M1_5Anim = m1Folder:WaitForChild("M1 5")
+local M1_4_AirtiltAnim = m1Folder:WaitForChild("M1 4 Airtilt")
+local M1_5_AirtiltAnim = m1Folder:WaitForChild("M1 5 Airtilt")
 local parryAnim = m1Folder:WaitForChild("Parry")
 local blockAnim = m1Folder:WaitForChild("Block")
+local blockStartAnim = m1Folder:WaitForChild("BlockStart")
+local blockParryAnim = m1Folder:WaitForChild("BlockParry")
 
 
 function AnimationManager:GetAnimations(character)
@@ -30,8 +34,12 @@ function AnimationManager:GetAnimations(character)
 		M1_3 = animator:LoadAnimation(M1_3Anim),
 		M1_4 = animator:LoadAnimation(M1_4Anim),
 		M1_5 = animator:LoadAnimation(M1_5Anim),
+		M1_4_Airtilt = animator:LoadAnimation(M1_4_AirtiltAnim),
+		M1_5_Airtilt = animator:LoadAnimation(M1_5_AirtiltAnim),
 		parry = animator:LoadAnimation(parryAnim),
 		block = animator:LoadAnimation(blockAnim),
+		blockParry = animator:LoadAnimation(blockParryAnim),
+		blockStart = animator:LoadAnimation(blockStartAnim)
 	}
 	cache[character] = anims
 	return anims
