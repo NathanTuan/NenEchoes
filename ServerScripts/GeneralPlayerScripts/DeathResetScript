@@ -1,0 +1,156 @@
+local rs = game:GetService("ReplicatedStorage")
+local GameModules = require(rs.GameModules)
+local ragdollModule = GameModules.RagdollModule
+local GeneralModule = GameModules.GeneralModule
+
+rs.RemoteEvents.CombatEvents.DeathEvent.OnServerEvent:Connect(function(player)
+	print("Fired Reset")
+	local character = player.Character
+
+	player.Character:SetAttribute("Busy", true)
+	ragdollModule:Ragdoll(character, 9.9)
+	GeneralModule.knockback(player.Character, player.Character, -5)
+	player.Character.Humanoid.WalkSpeed = 0
+	player.Character.Humanoid.JumpPower = 0
+	
+	local bool
+	task.spawn(function()
+		bool = GeneralModule.checkInterruption(player.Character, 10)
+		if bool then
+			character:Destroy()
+			task.delay(2, function()
+				player:LoadCharacterAsync()
+				--character.Humanoid.Health = character.Humanoid.MaxHealth
+				print("Respawn")
+			end)
+		else
+			local timer = player.Character.Torso:FindFirstChild("KnockedTimer")
+			timer:Destroy()
+			player.Character:SetAttribute("Busy", false)
+			ragdollModule:Unragdoll(character)
+			player.Character.Humanoid.WalkSpeed = player.Character:GetAttribute("Speed") + GeneralModule.getSpeedBuffs(player.Character)
+			player.Character.Humanoid.JumpPower = 50
+		end
+	end)
+	
+	local timer = rs.UIObjects.KnockedTimer:Clone()
+	timer.Parent = player.Character.Torso
+	timer.Adornee = player.Character.Torso
+	game:GetService("Debris"):AddItem(timer, 10)
+	task.spawn(function()
+		for i=10, 1, -1 do
+			if timer then
+				timer.TextLabel.Text = i
+				task.wait(1)
+			end
+		end
+	end)
+	
+	
+end)
+
+	
+
+rs.RemoteEvents.CombatEvents.GripEvent.OnServerEvent:Connect(function(player)
+	local checks = GeneralModule.checkAll(player)
+	if checks == false or player.Character:GetAttribute("Busy") == true then return end
+	
+	local hrp = player.Character.PrimaryPart
+	local direction = hrp.CFrame.LookVector * 20
+	local vectorGoal = direction + hrp.Position
+
+
+	local hitbox = rs.VFX.Hitboxes.GeneralHitboxes.GripHitbox:Clone()
+	hitbox.CFrame = CFrame.lookAt(hrp.Position, vectorGoal) * CFrame.new(0, 0, -3)
+	hitbox.Parent = game.Workspace
+	hitbox.Name = "GripBox"
+	game:GetService("Debris"):AddItem(hitbox, 0.1)
+
+
+	local hitboxParams = OverlapParams.new()
+	hitboxParams.FilterType = Enum.RaycastFilterType.Exclude
+	hitboxParams.FilterDescendantsInstances = {player.Character, hitbox}
+	local hits = workspace:GetPartBoundsInBox(hitbox.CFrame, hitbox.Size, hitboxParams)
+	local hitPlayers = {}
+
+	for _, hit in hits do
+		if not hit.Parent then return end
+		local hum = hit.Parent:FindFirstChild("Humanoid")
+		if not hitPlayers[hit.Parent] and hum and hit.Parent:GetAttribute("Incapacitated") == true then
+			hitPlayers[hit.Parent] = true
+			player.Character:SetAttribute("Busy", true)
+			player.Character:SetAttribute("Invincible", true)
+			player.Character.Humanoid.WalkSpeed = 0
+			player.Character.Humanoid.JumpPower = 0
+			GeneralModule.setCollisionGroup(player.Character, 3.5)
+		--	GeneralModule.setCollisionGroup(hit.Parent, 3.5)
+
+			ragdollModule:RestoreMotors(hit.Parent)
+			
+			local ehrp = hum.Parent.PrimaryPart
+			local m6D = Instance.new("Motor6D", hrp)
+			m6D.Part0 = hrp
+			m6D.Part1 = ehrp
+			
+			local av = Instance.new("AngularVelocity")
+			av.Name = "RotationBlocker"
+			av.AngularVelocity = Vector3.new(0, 0, 0)
+			av.MaxTorque = math.huge
+			av.Attachment0 = hrp:FindFirstChild("dashAtt")
+			av.Parent = hrp
+			
+			rs.RemoteEvents.UIEvents.LockMouseEvent:FireClient(player, true)
+			
+			print("Grip Hit")
+			local clip = player.Character.Humanoid.Animator:LoadAnimation(rs.Animations.M1Anims.GripAnimation)
+			clip:Play()
+			
+			local hurtClip = hit.Parent.Humanoid.Animator:LoadAnimation(rs.Animations.HurtAnims.GripAnimation)
+			hurtClip.Looped = true
+			hurtClip:Play()
+			task.delay(1.8, function()
+				for i=1, 6, 1 do
+					local orb = rs.VFX.CombatVFX.BloodOrbVFX:Clone()
+					orb.Position = hit.Parent.Head.Position
+					orb.Parent = game.Workspace
+
+					local x = math.random(-3, 3)*5
+					local z = math.random(-3, 3)*5
+					orb.AssemblyLinearVelocity = Vector3.new(x, 20, z)
+				end
+				
+				local target = ehrp.Parent
+				local highlight = Instance.new("Highlight")
+				highlight.Adornee = target
+				highlight.FillColor = Color3.new(1, 0.988235, 0.847059) 
+				highlight.FillTransparency = 1
+				highlight.OutlineTransparency = 1
+				highlight.Parent = target
+				highlight.DepthMode = Enum.HighlightDepthMode.Occluded 
+				local tween = game:GetService("TweenService"):Create(highlight, TweenInfo.new(1, Enum.EasingStyle.Linear), {FillTransparency = 0}):Play()
+			end)
+			task.wait(3)
+			print("Executed")
+			
+			local eplayer = game.Players:GetPlayerFromCharacter(ehrp.Parent)
+			hum = nil
+			ehrp.Parent:Destroy()
+			task.delay(2, function()
+				if eplayer then
+					eplayer:LoadCharacterAsync()
+					print("Respawn")
+				end
+				
+			end)
+			
+			player.Character:SetAttribute("Busy", false)
+			player.Character:SetAttribute("Invincible", false)
+			
+			player.Character.Humanoid.WalkSpeed = player.Character:GetAttribute("Speed") + GeneralModule.getSpeedBuffs(player.Character)
+			player.Character.Humanoid.JumpPower = 50
+			m6D:Destroy()
+			av:Destroy()
+			rs.RemoteEvents.UIEvents.LockMouseEvent:FireClient(player, false)
+		end
+	end
+end)
