@@ -1,4 +1,6 @@
 local rs = game:GetService("ReplicatedStorage")
+local GameModules = require(rs.GameModules)
+local GeneralModule = GameModules.GeneralModule
 local openSetUI = rs.RemoteEvents.UIEvents.OpenSetUI
 local closeSetUI = rs.RemoteEvents.UIEvents.CloseSetUI
 local IHateUI = rs.RemoteEvents.UIEvents.IHateUI
@@ -20,4 +22,35 @@ IHateUI.OnServerEvent:Connect(function(player, bool)
 	end
 end)
 
+
+rs.RemoteEvents.UIEvents.LockMouseEvent.OnServerEvent:Connect(function(player, bool)
+	rs.RemoteEvents.UIEvents.LockMouseEvent:FireClient(player, bool)
+end)
+
+rs.RemoteEvents.UIEvents.CameraEffectEvent.OnServerEvent:Connect(function(player, bool)
+	if bool == true then
+		player.Character:SetAttribute("MovementBlocked", true)
+		local hum = player.Character.Humanoid
+		
+		if hum then
+			hum.WalkSpeed = 0
+			hum.JumpPower = 0
+		end
+		
+		for i, v in pairs(hum.Animator:GetPlayingAnimationTracks()) do
+			if v.Priority ~= Enum.AnimationPriority.Idle then
+				v:Stop(0.15)
+			end
+		end
+	else
+		player.Character:SetAttribute("MovementBlocked", false)
+		local hum = player.Character.Humanoid
+
+		if hum then
+			hum.WalkSpeed = player.Character:GetAttribute("Speed") + GeneralModule.getSpeedBuffs(player.Character)
+			hum.JumpPower = 50
+		end
+	end
+	
+end)
 
