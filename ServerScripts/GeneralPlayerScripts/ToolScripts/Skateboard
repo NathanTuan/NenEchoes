@@ -1,0 +1,76 @@
+local ss = game:GetService("ServerStorage")
+local rs = game:GetService("ReplicatedStorage")
+local GameModules = require(rs.GameModules)
+local GeneralModule = GameModules.GeneralModule
+
+rs.RemoteEvents.ToolEvents.SkatingEvent.OnServerEvent:Connect(function(player, bool)
+	print("Skate")
+	
+	local hum = player.Character.Humanoid
+	--[[
+	for i, v in pairs(hum.Animator:GetPlayingAnimationTracks()) do
+		v:Stop(0.3)
+	end
+--	local clip = hum.Animator:LoadAnimation(rs.ToolAnims.SkateboardAnims.IdleAnim)--hum.Animator:LoadAnimation(rs.MovementAnims.skatingAnim)
+	]]
+	
+	
+	local tool = player.Character:FindFirstChild("Skateboard")
+	local m6D = tool.Handles["SkateboardWeld"]
+	local speedBuff
+	if bool then
+		--clip:Play(0.15)
+		
+		--hum.JumpPower = 0
+		GeneralModule.addSpeedBuff(player, "SkateboardSpeedBuff", 24)
+		rs.RemoteEvents.MovementEvents.MoveEndEvent:FireClient(player)
+		player.Character.HumanoidRootPart.CFrame = player.Character.HumanoidRootPart.CFrame * CFrame.new(0, 2, 0)
+		m6D.Part0 = player.Character.HumanoidRootPart
+		m6D.C0 = CFrame.new(0, -3, 0) * CFrame.Angles(0, 0, 0) ---0.75
+		
+		for _, part in pairs(tool.SkateboardModel:GetChildren()) do
+			part.CanCollide = true
+			part.CanTouch = true
+		end
+		
+		
+		for _, trail in pairs(tool.SkateboardModel.TrailHolder:GetChildren()) do
+			if trail:IsA("Trail") then
+				trail.Enabled = true
+			end
+		end
+		
+	else
+	--	clip:Stop(0.3)
+		print("Should stop")
+		
+		
+		GeneralModule.removeSpeedBuff(player.Character, "SkateboardSpeedBuff")
+		
+		for _, part in pairs(tool.SkateboardModel:GetChildren()) do
+			part.CanCollide = false
+			part.CanTouch = false
+		end
+		
+		for _, trail in pairs(tool.SkateboardModel.TrailHolder:GetChildren()) do
+			if trail:IsA("Trail") then
+				trail.Enabled = false
+			end
+		end
+		
+		
+		m6D.Part0 = player.Character["Right Arm"]
+		m6D.C0 = CFrame.new(0, -1.5, 0) * CFrame.Angles(0, 0, math.rad(90))
+		rs.RemoteEvents.MovementEvents.MoveEndEvent:FireClient(player)
+	end
+	
+	
+	
+	--[[
+	local skateboard = ss.Skateboard:Clone()
+	skateboard.Parent = player.Character
+	skateboard.Weld.Part0 = player.Character["Left Leg"]
+	skateboard.Weld.Part1 = skateboard
+	skateboard.Weld.C0 = CFrame.new(0, -1, 0) * CFrame.Angles(math.rad(90), 0, 0)
+	]]
+end)
