@@ -1,0 +1,202 @@
+-- Modular Animation System
+-- Adapts animations based on equipped tools and character state
+
+local AnimationSelector = {}
+
+-- Animation mapping for different tools/states
+
+local animationMap = {
+	Default = {
+		walk = "walk",
+		leanLeft = "leftLean",
+		leanRight = "rightLean",
+		sprint = "sprint",
+		sprintLeft = "leftSprint",
+		sprintRight = "rightSprint",
+		idle = "idle",
+		jump = "startJump",
+		endJump = "endJump",
+		roll = "roll",
+		rollLeft = "leftRoll",
+		rollRight = "rightRoll",
+		rollBack = "backRoll",
+	},
+	Scythe = {
+		walk = "scytheWalk",
+		leanLeft = "scytheWalk",
+		leanRight = "scytheWalk",
+		sprint = "scytheRun",
+		sprintLeft = "scytheRun",
+		sprintRight = "scytheRun",
+		idle = "scytheIdle",
+		jump = "startJump",
+		endJump = "endJump",
+		roll = "roll",
+		rollLeft = "leftRoll",
+		rollRight = "rightRoll",
+		rollBack = "backRoll",
+	},
+	Swimming = {
+		walk = "walk",
+		leanLeft = "leftLean",
+		leanRight = "rightLean",
+		sprint = "sprint",
+		sprintLeft = "leftSprint",
+		sprintRight = "rightSprint",
+		idle = "idle",
+		jump = "startJump",
+		endJump = "endJump",
+		roll = "roll",
+		rollLeft = "leftRoll",
+		rollRight = "rightRoll",
+		rollBack = "backRoll",
+	},
+	Skateboard = {
+		walk = "skateboardIdle",
+		leanLeft = "skateboardIdle",
+		leanRight = "skateboardIdle",
+		sprint = "skateboardRide",
+		sprintLeft = "skateboardRide",
+		sprintRight = "skateboardRide",
+		idle = "skateboardIdle",
+		jump = "skateboardJump",
+		endJump = "endJump",
+		roll = "roll",
+		rollLeft = "leftRoll",
+		rollRight = "rightRoll",
+		rollBack = "backRoll",
+	},
+	Compass = {
+		walk = "walk",
+		leanLeft = "leftLean",
+		leanRight = "rightLean",
+		sprint = "sprint",
+		sprintLeft = "leftSprint",
+		sprintRight = "rightSprint",
+		idle = "compassIdle",
+		jump = "startJump",
+		endJump = "endJump",
+		roll = "roll",
+		rollLeft = "leftRoll",
+		rollRight = "rightRoll",
+		rollBack = "backRoll",
+	},
+	FishingRod = {
+		walk = "walk",
+		leanLeft = "leftLean",
+		leanRight = "rightLean",
+		sprint = "sprint",
+		sprintLeft = "leftSprint",
+		sprintRight = "rightSprint",
+		idle = "fishingRodIdle",
+		jump = "startJump",
+		endJump = "endJump",
+		roll = "roll",
+		rollLeft = "leftRoll",
+		rollRight = "rightRoll",
+		rollBack = "backRoll",
+	}
+}
+
+local function getActiveState(player)
+	if not player.Character then return "Default" end
+
+	local weapon = player.Character:GetAttribute("Weapon")
+
+	-- Check for scythe
+	if weapon == "SpawnedScythe" then
+		return "Scythe"
+	end
+
+	if player.Character:GetAttribute("Swimming") then
+		return "Swimming"
+	end
+	
+	-- Check for skateboard (when equipped/driving)
+	if player.Character:FindFirstChild("SkateboardSpeedBuff") then
+		return "Skateboard"
+	end
+	
+	if player.Character:FindFirstChild("Compass") then
+		return "Compass"
+	end
+	
+	return "Default"
+end
+
+-- Get the animation name for a specific action in the current state
+function AnimationSelector.getAnimName(player, action)
+	local state = getActiveState(player)
+	--print("State: "..state)
+	local anim = animationMap[state] and animationMap[state][action]
+
+	if not anim then
+		anim = animationMap["Default"][action]
+	end
+
+	return anim
+end
+
+-- Play animation based on character state
+local function yieldAllPlay(hum, anim, anims)
+	local animOriginType = nil
+	local clip
+	if anims and type(anims) == "table" then
+		animOriginType = "table"
+	else
+		animOriginType = "animation"
+		clip = hum.Animator:LoadAnimation(anims):Play()
+	end
+	local found = false
+	for i, v in pairs(hum.Animator:GetPlayingAnimationTracks()) do
+		--print(v.Name)
+		if (v.Name ~= anim) then
+			if v.Priority ~= Enum.AnimationPriority.Idle and v.Priority == Enum.AnimationPriority.Movement then
+				v:Stop(0.15)
+				--print("Stopped because not Idle")
+			else
+				if animOriginType == "table" then
+					if anims[anim].Priority == Enum.AnimationPriority.Idle and v.Priority == Enum.AnimationPriority.Idle then
+						--print("Was Idle and anim was Idle (table")
+						v:Stop(0.15)
+					end
+				else
+					if clip.Priority == Enum.AnimationPriority.Idle and v.Priority == Enum.AnimationPriority.Idle then
+						--print("Was Idle and anim was Idle (not table")
+						v:Stop(0.15)
+					end
+				end
+			end
+		elseif v.Name == anim then
+			found = true
+		end
+	end
+
+	if found == false then
+		--print("NotFound")
+		if anims and type(anims) == "table" then
+			anims[anim]:Play(0.15)
+		else
+			clip:Play()
+		end
+	end
+end
+
+function AnimationSelector.play(player, action, anims)
+	if not player.Character then return end
+
+	local hum = player.Character.Humanoid
+	local animName = AnimationSelector.getAnimName(player, action)
+	
+	--print("Playing animation:", animName)
+	if animName then
+		yieldAllPlay(hum, animName, anims)
+	else
+		warn("Animation not found for action:", action)
+	end
+end
+
+
+return {
+	AnimationSelector = AnimationSelector,
+}
