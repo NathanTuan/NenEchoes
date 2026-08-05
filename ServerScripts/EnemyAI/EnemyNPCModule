@@ -1,9 +1,10 @@
 local module = {}
 
-local modScript = require(game:GetService("ServerScriptService").ModuleScript)
-local ragdollModule = require(game:GetService("ServerScriptService").ragdollModule)
 local rs = game:GetService("ReplicatedStorage")
-
+local GameModules = require(rs.GameModules)
+local modScript = GameModules.GeneralModule
+local ragdollModule = GameModules.RagdollModule
+local hitEffectTemplate = rs.VFX.CombatVFX.WindImpactVFX
 
 module.punch = function(dummy, enemyNPCAnims, hitPlayers)
 	
@@ -19,10 +20,16 @@ module.punch = function(dummy, enemyNPCAnims, hitPlayers)
 			--local clip = dummy.Humanoid.Animator:LoadAnimation(rs.M1Anims["M1 "..dummy:GetAttribute("Combo")])
 			--clip:Play()
 			local anims = enemyNPCAnims[dummy]
-			anims["M1_"..dummy:GetAttribute("Combo")]:Play()
+			local clip = anims["M1_"..dummy:GetAttribute("Combo")]
+			clip:Play()
 			modScript.knockback(dummy, dummy, 10)
 			task.spawn(function()
-				task.wait(0.23)
+				local waitTime = clip.Length * 0.35
+				if dummy:GetAttribute("Combo") == 5 then
+					waitTime = clip.Length*0.55
+				end
+				task.wait(waitTime)
+				
 				if dummy:GetAttribute("Stunned") == true then return end
 				local hitbox = Instance.new("Part")
 				hitbox.Size = Vector3.new(5, 6, 5)
@@ -32,7 +39,8 @@ module.punch = function(dummy, enemyNPCAnims, hitPlayers)
 				hitbox.Anchored = true
 				hitbox.BrickColor = BrickColor.new("Bright red")
 				hitbox.Parent = game.Workspace
-				hitbox.Position = dummy.PrimaryPart.Position + dummy.PrimaryPart.CFrame.LookVector*3
+				local rootPart = dummy.PrimaryPart
+				hitbox.CFrame = CFrame.lookAt(rootPart.Position + rootPart.CFrame.LookVector*4, rootPart.Position + rootPart.CFrame.LookVector * 6)
 				hitbox.Name = "Hitbox"
 
 				game:GetService("Debris"):AddItem(hitbox, 0.3)
@@ -49,7 +57,7 @@ module.punch = function(dummy, enemyNPCAnims, hitPlayers)
 				for _, v in partsInBox do
 					local hum = v.Parent:FindFirstChild("Humanoid")
 
-					if hum and not hitPlayers[v.Parent] and not v.Parent:HasTag("EnemyNPC") then	
+					if hum and not hitPlayers[v.Parent] and not v.Parent:HasTag("EnemyNPC") and hum.Parent:GetAttribute("Invincible") ~= true then	
 
 						hitPlayers[v.Parent] = true
 						task.delay(0.3, function()
@@ -81,38 +89,95 @@ module.punch = function(dummy, enemyNPCAnims, hitPlayers)
 									end
 								end
 								game:GetService("Debris"):AddItem(parryFX, 3)
+								
+								local sfx = rs.SFX.Combat.ParrySFX:Clone()
+								sfx.Parent = v.Parent.PrimaryPart
+								sfx:Play()
+								game:GetService("Debris"):AddItem(sfx, sfx.TimeLength)
 
-								modScript.stun(dummy, 0.8)
-								modScript.stun(v.Parent, 0.6)
+								modScript.stun(dummy, 1.2, false)
+								modScript.stun(v.Parent, 0.8, false)
+								local clip = hum.Animator:LoadAnimation(rs.Animations.M1Anims.BlockParry):Play()
 
 							elseif v.Parent:GetAttribute("Blocking") == true then
+								if hum.Parent:GetAttribute("Invincible") == true then return end 
+								
+								local sfx =	rs.SFX.Combat.M1BlockedSFX:Clone()
+								sfx.Parent = v.Parent.PrimaryPart
+								sfx:Play()
+								game:GetService("Debris"):AddItem(sfx, sfx.TimeLength)
 								hum:TakeDamage(2)
 								modScript.Outline(v.Parent)
+								modScript.createHitEffect(v.Parent.PrimaryPart.Position + Vector3.new(0, 0.9, -1.5), rs.VFX.CombatVFX.BlockHitVFX)
 							else
-
+								if hum.Parent:GetAttribute("Invincible") == true then return end 
+								local sfx = rs.SFX.Combat.M1HitSFX:Clone()
+								sfx.Parent = v.Parent.PrimaryPart
+								sfx:Play()
+								game:GetService("Debris"):AddItem(sfx, sfx.TimeLength)
+								
 								modScript.stun(hum.Parent, 1.3)
 								hum:TakeDamage(5)
 								modScript.Outline(v.Parent)
+								modScript.createHitEffect(v.Parent.PrimaryPart.Position + Vector3.new(0, 0.9, -1.5), hitEffectTemplate)
 							end
 						else
 							if v.Parent:GetAttribute("Parrying") == true then
-								modScript.createHitEffect(v.Parent.PrimaryPart.Position + Vector3.new(0, 0.9, -1.5), rs.VFX.CombatVFX.parryFX)
+								local parryFX = rs.VFX.CombatVFX.parryFX:Clone()
+
+
+								local arm = v.Parent:FindFirstChild("Left Arm")
+								if arm then
+									local armForward = arm.CFrame.RightVector
+									parryFX.Position = arm.Position + armForward *1
+									local m6D = Instance.new("Motor6D")
+									m6D.Parent = arm
+									m6D.Part0 = arm
+									m6D.Part1 = parryFX
+									m6D.C1 = CFrame.new(0, 0, 1)
+									game:GetService("Debris"):AddItem(m6D, 3)
+								end
+
+								parryFX.Parent = game.Workspace
+								task.wait(0.1)
+								for _, att in pairs(parryFX:GetChildren()) do
+									for _, emitter in pairs(att:GetChildren()) do
+										emitter:Emit(emitter:GetAttribute("EmitCount"))
+									end
+								end
+								game:GetService("Debris"):AddItem(parryFX, 3)
+
+								local sfx = rs.SFX.Combat.ParrySFX:Clone()
+								sfx.Parent = v.Parent.PrimaryPart
+								sfx:Play()
+								game:GetService("Debris"):AddItem(sfx, sfx.TimeLength)
+
+								modScript.stun(dummy, 1.2, false)
+								modScript.stun(v.Parent, 0.8, false)
+								local clip = hum.Animator:LoadAnimation(rs.Animations.M1Anims.Parry):Play()
 							else
+								local sfx = rs.SFX.Combat.M1HitSFX:Clone()
+								sfx.Parent = v.Parent.PrimaryPart
+								sfx:Play()
+								game:GetService("Debris"):AddItem(sfx, sfx.TimeLength)
+								
 								modScript.stun(hum.Parent, 2)
-								modScript.knockback(dummy, hum.Parent, 50)
 								ragdollModule:Ragdoll(hum.Parent, 2)
 								hum:TakeDamage(8)
 								if v.Parent:GetAttribute("Blocking") == true then
 									modScript.blockbreak(v.Parent)
+								else
+									modScript.knockback(dummy, hum.Parent, 30)
 								end
 								modScript.Outline(v.Parent)
+								modScript.createHitEffect(v.Parent.PrimaryPart.Position + Vector3.new(0, 0.9, -1.5), hitEffectTemplate)
 							end
 						end
 					end
 				end
 			end)
 
-			task.wait(0.3)
+			task.wait(clip.Length)
 			if dummy:GetAttribute("Combo") < 5 then
 				dummy:SetAttribute("Combo", dummy:GetAttribute("Combo")+1)
 				dummy:SetAttribute("Cooldown", false)
