@@ -1,0 +1,100 @@
+local rs = game:GetService("ReplicatedStorage")
+
+local AnimationManager = {}
+
+local cache = {} 
+
+local movementAnims = rs:WaitForChild("Animations"):WaitForChild("MovementAnims")
+local generalMovementFolder = movementAnims:WaitForChild("GeneralMovementAnims")
+local kiteAnims = rs:WaitForChild("NenAbilities"):WaitForChild("Kite"):WaitForChild("KiteAnims")
+local toolAnims = rs:WaitForChild("Animations"):WaitForChild("ToolAnims")
+local skateboardAnims = toolAnims:WaitForChild("SkateboardAnims")
+local compassAnims = toolAnims:WaitForChild("CompassAnims")
+local fishingRodAnims = toolAnims:WaitForChild("FishingRodAnims")
+
+local walkAnim = generalMovementFolder:WaitForChild("walkAnim")
+local leftLean = generalMovementFolder:WaitForChild("leftLeanAnim")
+local rightLean = generalMovementFolder:WaitForChild("rightLeanAnim")
+
+local leftSprintAnim = generalMovementFolder:WaitForChild("leftSprintAnim")
+local rightSprintAnim = generalMovementFolder:WaitForChild("rightSprintAnim")
+local sprintAnim = generalMovementFolder:WaitForChild("sprintAnim")
+
+local startJumpAnim = generalMovementFolder:WaitForChild("startJumpAnim")
+local endJumpAnim = generalMovementFolder:WaitForChild("endJumpAnim")
+
+local climbingAnim = generalMovementFolder:WaitForChild("ClimbingAnim")
+
+local rollAnim = generalMovementFolder:WaitForChild("rollAnim")
+local leftRollAnim = generalMovementFolder:WaitForChild("leftRollAnim")
+local rightRollAnim = generalMovementFolder:WaitForChild("rightRollAnim")
+local backRollAnim = generalMovementFolder:WaitForChild("backRollAnim")
+
+local idleAnim = generalMovementFolder:WaitForChild("idleAnim")
+
+local scytheIdleAnim = kiteAnims:WaitForChild("scytheIdleAnim")
+local scytheWalkAnim = kiteAnims:WaitForChild("scytheWalkAnim")
+local scytheRunAnim = kiteAnims:WaitForChild("scytheRunAnim")
+
+local skateIdleAnim = skateboardAnims:WaitForChild("skateIdleAnim")
+local skateJumpingAnim = skateboardAnims:WaitForChild("skateJumpingAnim")
+local skateRidingAnim = skateboardAnims:WaitForChild("skateRidingAnim")
+
+local compassIdleAnim = compassAnims:WaitForChild("compassIdleAnimation")
+local fishingRodIdleAnim = fishingRodAnims:WaitForChild("fishingRodIdleAnim")
+
+
+
+function AnimationManager:GetAnimations(character)
+	if cache[character] then
+		return cache[character]
+	end
+
+	local humanoid = character:WaitForChild("Humanoid")
+	local animator = humanoid:WaitForChild("Animator")
+
+	
+
+	local anims = {
+		walk = animator:LoadAnimation(walkAnim),
+		leftLean = animator:LoadAnimation(leftLean),
+		rightLean = animator:LoadAnimation(rightLean),
+		leftSprint = animator:LoadAnimation(leftSprintAnim),
+		rightSprint = animator:LoadAnimation(rightSprintAnim),
+		sprint = animator:LoadAnimation(sprintAnim),
+		startJump = animator:LoadAnimation(startJumpAnim),
+		endJump = animator:LoadAnimation(endJumpAnim),
+		climb = animator:LoadAnimation(climbingAnim),
+		roll = animator:LoadAnimation(rollAnim),
+		leftRoll = animator:LoadAnimation(leftRollAnim),
+		rightRoll = animator:LoadAnimation(rightRollAnim),
+		backRoll = animator:LoadAnimation(backRollAnim),
+		idle = animator:LoadAnimation(idleAnim),
+		scytheIdle = animator:LoadAnimation(scytheIdleAnim),
+		scytheWalk = animator:LoadAnimation(scytheWalkAnim),
+		scytheRun = animator:LoadAnimation(scytheRunAnim),
+		skateboardIdle = animator:LoadAnimation(skateIdleAnim),
+		skateboardJump = animator:LoadAnimation(skateJumpingAnim),
+		skateboardRide = animator:LoadAnimation(skateRidingAnim),
+		fishingRodIdle = animator:LoadAnimation(fishingRodIdleAnim),
+		compassIdle = animator:LoadAnimation(compassIdleAnim),
+	}
+	anims.idle.Priority = Enum.AnimationPriority.Idle
+	anims.scytheIdle.Priority = Enum.AnimationPriority.Idle
+	anims.scytheWalk.Priority = Enum.AnimationPriority.Movement
+	anims.scytheRun.Priority = Enum.AnimationPriority.Movement
+	anims.climb.Priority = Enum.AnimationPriority.Action4
+	anims.compassIdle.Priority = Enum.AnimationPriority.Idle
+	--anims.compassIdle.Looped = true
+
+	
+
+	cache[character] = anims
+	return anims
+end
+
+function AnimationManager:ClearCache(character)
+	cache[character] = nil
+end
+
+return AnimationManager
