@@ -3,15 +3,15 @@ local rs = game:GetService("ReplicatedStorage")
 
 local AnimationManager = {}
 
-local hurt_1Anim = rs:WaitForChild("HurtAnims"):WaitForChild("hurtAnim (1)")
-local hurt_2Anim = rs:WaitForChild("HurtAnims"):WaitForChild("hurtAnim (2)")
-local m1Folder = rs:WaitForChild("M1Anims")
+local hurt_1Anim = rs:WaitForChild("Animations"):WaitForChild("HurtAnims"):WaitForChild("hurtAnim (1)")
+local hurt_2Anim = rs:WaitForChild("Animations"):WaitForChild("HurtAnims"):WaitForChild("hurtAnim (2)")
+local m1Folder = rs:WaitForChild("Animations"):WaitForChild("M1Anims")
 local M1_1Anim = m1Folder:WaitForChild("M1 1")
 local M1_2Anim = m1Folder:WaitForChild("M1 2")
 local M1_3Anim = m1Folder:WaitForChild("M1 3")
 local M1_4Anim = m1Folder:WaitForChild("M1 4")
 local M1_5Anim = m1Folder:WaitForChild("M1 5")
-local movementAnims = rs:WaitForChild("MovementAnims")
+local movementAnims = rs:WaitForChild("Animations"):WaitForChild("MovementAnims"):WaitForChild("GeneralMovementAnims")
 local rollAnim = movementAnims:WaitForChild("rollAnim")
 local backRollAnim = movementAnims:WaitForChild("backRollAnim")
 
