@@ -1,0 +1,96 @@
+local TeleportService = game:GetService("TeleportService")
+local rs = game:GetService("ReplicatedStorage")
+local GameModules = require(rs.GameModules)
+local GeneralModule = GameModules.GeneralModule
+
+local examQueue = {}
+local currentExamID = math.random(1, 6)
+local examStarting = false
+local isTeleporting = false
+
+local queueCapacities = {
+	["Exam1"] = 10, -- tunnel run
+	["Exam2"] = 10, -- collect dream eggs
+	["Exam3"] = 10, -- killua beats everyone up one
+	["Exam4"] = 10, -- two random tags
+	["Exam5"] = 5, -- prisoners one
+	["Exam6"] = 10 -- duels
+}
+
+
+
+local function checkExamQueueFull(examName)
+	return #examQueue >= queueCapacities[examName]
+end
+
+local function teleportExamQueue() 
+	if #examQueue == 0 then examStarting = false return end 
+	local placeId = 90753342720210 -- Hunter Exam Place ID 
+	
+	isTeleporting = true
+	local success, result = pcall(function()
+		return TeleportService:TeleportAsync(placeId, examQueue)
+	end)
+	isTeleporting = false
+	
+	if success then 
+		print("Teleporting") 
+		table.clear(examQueue) 
+		currentExamID = math.random(1, 6)
+		examStarting = false 
+	else 
+		warn("Teleport failed:", result) 
+		examStarting = false 
+	end 
+end
+
+local function startExamCountdown(examName) 
+	examStarting = true 
+	local countdown = 10 
+	while countdown > 0 do
+		if #examQueue == 0 then 
+			examStarting = false 
+			return 
+		end 
+		if checkExamQueueFull(examName) then -- If queue is full, skip the rest of the countdown 
+			break 
+		end -- Notify everyone currently in the queue 
+		for _, queuedPlayer in ipairs(examQueue) do 
+			if queuedPlayer.Parent then 
+				GeneralModule.addNotification(queuedPlayer, "Hunter Exam will start in " .. countdown .. " seconds!" ) 
+			end 
+		end 
+		task.wait(1) 
+		countdown -= 1 
+	end 
+	teleportExamQueue() 
+end
+
+rs.RemoteEvents.NPCEvents.QuestNPCEvents.QueueHunterExam.OnServerEvent:Connect(function(player)
+	
+	-- don't allow players to join while the current group is teleporting 
+	if isTeleporting == true then return end
+	
+	-- deduplication check
+	if table.find(examQueue, player) then
+		return
+	end
+
+	local examName = "Exam" .. tostring(currentExamID)
+	
+	if checkExamQueueFull(examName) then
+		GeneralModule.addNotification(player, "Hunter Exam Queue Full. Try again in a few seconds!" ) 
+		return 
+	end
+
+	table.insert(examQueue, player)
+	GeneralModule.addNotification( player, "You have been queued for the Hunter Exam!" )
+	GeneralModule.addNotification( player, "Hunter Exam automatically begins after 10 seconds or when the queue is full!" )
+	
+	-- First player starts the countdown 
+	if not examStarting then
+		task.spawn(function()
+			startExamCountdown(examName)
+		end)
+	end
+end)
