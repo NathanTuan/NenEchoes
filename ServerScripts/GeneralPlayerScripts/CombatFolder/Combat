@@ -1,7 +1,6 @@
 local players = game:GetService("Players")
 local redOutline = game:GetService("ReplicatedStorage").redOutline
 local m1Event = game:GetService("ReplicatedStorage").RemoteEvents.CombatEvents.M1
-local m1Script = game.StarterPlayer.StarterCharacterScripts.Controller.LocalCombat
 local tweenService = game:GetService("TweenService")
 
 local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.InOut)
