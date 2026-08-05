@@ -7,6 +7,7 @@ local cache = {}
 
 --Nen
 local chargeNenAnim = rs.NenAbilities.Killua.KilluaAnims.ChargeNenAnim
+local holdChargeNenAnim = rs.NenAbilities.Killua.KilluaAnims.HoldChargeNenAnim
 
 --Kite
 local barragePoseAnim = rs.NenAbilities.Kite.KiteAnims.barragePose
@@ -30,6 +31,12 @@ local palmChargeAnim = rs.NenAbilities.Killua.KilluaAnims.PalmChargeUp
 local palmRushAnim = rs.NenAbilities.Killua.KilluaAnims.PalmRush
 local thunderComboAnim = rs.NenAbilities.Killua.KilluaAnims.thunderCombo
 local thunderHurtAnim = rs.NenAbilities.Killua.KilluaAnims.thunderHurt
+local godspeedTransformationAnim = rs.NenAbilities.Killua.KilluaAnims.GodspeedTransformationAnim
+
+--Nobunaga
+local counterAnim = rs.NenAbilities.Nobunaga.NobunagaAnims.counterAnim
+local counterFinishAnim = rs.NenAbilities.Nobunaga.NobunagaAnims.counterFinishAnim
+
 
 
 function AnimationManager:GetAnimations(character)
@@ -44,6 +51,7 @@ function AnimationManager:GetAnimations(character)
 	
 	local clips = {
 		chargeNenClip = animator:LoadAnimation(chargeNenAnim),
+		holdChargeNenClip = animator:LoadAnimation(holdChargeNenAnim),
 		
 		barragePoseClip = animator:LoadAnimation(barragePoseAnim),
 		barrageClip = animator:LoadAnimation(barrageAnim),
@@ -64,7 +72,13 @@ function AnimationManager:GetAnimations(character)
 		palmRushClip = animator:LoadAnimation(palmRushAnim),
 		thunderComboClip = animator:LoadAnimation(thunderComboAnim),
 		thunderHurtClip = animator:LoadAnimation(thunderHurtAnim),
+		godspeedTransformationClip = animator:LoadAnimation(godspeedTransformationAnim),
+		
+		counterClip = animator:LoadAnimation(counterAnim),
+		counterFinishClip = animator:LoadAnimation(counterFinishAnim),
 	}	
+	
+	
 
 	cache[character] = clips
 	return clips
