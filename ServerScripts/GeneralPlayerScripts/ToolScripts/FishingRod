@@ -1,0 +1,163 @@
+local ss = game:GetService("ServerStorage")
+local rs = game:GetService("ReplicatedStorage")
+local GameModules = require(rs.GameModules)
+local modScript = GameModules.GeneralModule
+local tweenService = game:GetService("TweenService")
+local lineSpeed = 50
+
+local castAnim = rs.Animations.ToolAnims.FishingRodAnims.fishingRodCastAnim
+local reelAnim = rs.Animations.ToolAnims.FishingRodAnims.fishingRodReelAnim
+
+local function spawnBoss(hook)
+	local bubbleVFX = rs.VFX.EnemyVFX.bubbleVFX:Clone()
+	bubbleVFX.Position = hook.Position
+	bubbleVFX.Parent = game.Workspace
+	game.Debris:AddItem(bubbleVFX, 2)
+
+	for _, att in pairs(game.Workspace.EnemyNPCS.Island1.Batch2.MasterOfTheSwamp.fishSpawnLake:GetChildren()) do
+		att.Bubble.Enabled = true
+		task.delay(2, function()
+			att.Bubble.Enabled = false
+		end)
+	end
+	task.wait(2)
+	local newBoss = ss.EnemyNPCS.Island1.Batch2.MasterOfTheSwamp.fishBoss:Clone()
+	newBoss:PivotTo(game.Workspace.EnemyNPCS.Island1.Batch2.MasterOfTheSwamp.fishBossPos.CFrame)
+	newBoss.Name = "fishBoss"
+	newBoss.Parent = game.Workspace.EnemyNPCS.Island1.Batch2.MasterOfTheSwamp
+end
+
+local function spawnFish(player, hook)
+	local bubbleVFX = rs.VFX.EnemyVFX.bubbleVFX:Clone()
+	bubbleVFX.Position = hook.Position
+	bubbleVFX.Parent = game.Workspace
+	game.Debris:AddItem(bubbleVFX, 2)
+	task.wait(2)
+	rs.StatRemoteEvents.UpdateInventory:FireClient(player, "Fish", 1)
+end
+
+rs.RemoteEvents.ToolEvents.FishingRodEvent.OnServerEvent:Connect(function(player, rod, target, lineOut)
+	
+	
+	local hook = rod.hook
+	local rodEnd = rod.rodEnd
+	
+	
+	if lineOut == false then
+		player.Character:SetAttribute("Busy", true)
+		player.Character.Humanoid.WalkSpeed = 0
+		player.Character.Humanoid.JumpPower = 0
+		player.Character.Humanoid.AutoRotate = false
+		rs.RemoteEvents.UIEvents.LockMouseEvent:FireClient(player, true)
+
+		local hum = player.Character.Humanoid
+		for i, v in pairs(hum.Animator:GetPlayingAnimationTracks()) do
+			v:Stop(0)
+		end
+		task.wait(0.1)
+		local clip = hum.Animator:LoadAnimation(castAnim)
+		clip:Play()
+
+		task.wait(1.66)
+		local clip = hum.Animator:LoadAnimation(rs.Animations.ToolAnims.FishingRodAnims.fishingRodIdleAnim)
+		clip.Looped = true
+		clip:Play()
+		local dir = (target-rodEnd.Position)
+		
+		if dir.Magnitude > 50 then
+			dir = dir.Unit*50
+		end
+		
+		local timeLen = (dir.Magnitude/lineSpeed)
+		local tween = tweenService:Create(hook, TweenInfo.new(timeLen, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Position = hook.Position + dir})
+		tween:Play()
+		
+		--hook.Position = hook.Position + dir
+		local curLine = Instance.new("RopeConstraint")
+		curLine.Name = "FishingLine"
+		curLine.Attachment0 = hook.hookAtt
+		curLine.Attachment1 = rodEnd.poleAtt
+		--local tweenLen = tweenService:Create(curLine, TweenInfo.new(timeLen, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {Length = (hook.Position-rodEnd.Position).Magnitude*1.5}):Play()
+		curLine.Length = dir.Magnitude 
+		curLine.Visible = true
+		curLine.Thickness = 0.1
+		curLine.Parent = rod
+				
+		task.spawn(function()
+			tween.Completed:Connect(function()
+				local params = RaycastParams.new()
+				params.FilterType = Enum.RaycastFilterType.Exclude
+				params.FilterDescendantsInstances = {player.Character, game.Workspace.ocean}
+
+				local result = workspace:Raycast(hook.Position+Vector3.new(0, 2, 0), Vector3.new(0, -4, 0), params)
+				if result then
+					print(result.Instance.Name)
+					if result.Instance.Name == "fishSpawnLake" then
+						task.delay(2, function()
+							local line = rod:FindFirstChild("FishingLine")
+							if line then
+								local num = math.random(1, 7)
+								if num == 4 then
+									spawnBoss(hook)
+								else
+									spawnFish(player, hook)
+								end
+								
+								
+								clip = hum.Animator:LoadAnimation(reelAnim)
+								clip:Play()
+								line:Destroy()
+								hook.Position = rodEnd.Position
+								player.Character:SetAttribute("Busy", false)
+								player.Character.Humanoid.WalkSpeed = player.Character:GetAttribute("Speed") + modScript.getSpeedBuffs(player.Character)
+								player.Character.Humanoid.JumpPower = 50
+								player.Character.Humanoid.AutoRotate = true
+								rs.RemoteEvents.UIEvents.LockMouseEvent:FireClient(player, false)
+							end
+
+						end)
+					else
+						local warningNoti = rs.UIObjects.WarningNotiLabel:Clone()
+						warningNoti.TextLabel.Text = "Can't Fish Here!"
+						warningNoti.Parent = player:WaitForChild("PlayerGui").Main.Notifications
+						local tween = tweenService:Create(warningNoti, TweenInfo.new(2, Enum.EasingStyle.Linear), {GroupTransparency = 1}):Play()
+						task.delay(2, function()
+							warningNoti:Destroy()
+						end)
+					end
+				else
+					local warningNoti = rs.UIObjects.WarningNotiLabel:Clone()
+					warningNoti.TextLabel.Text = "Can't Fish Here!"
+					warningNoti.Parent = player:WaitForChild("PlayerGui").Main.Notifications
+					local tween = tweenService:Create(warningNoti, TweenInfo.new(2, Enum.EasingStyle.Linear), {GroupTransparency = 1}):Play()
+					task.delay(2, function()
+						warningNoti:Destroy()
+					end)
+				end
+
+			end)
+		end)
+	else
+		for i, v in pairs(player.Character.Humanoid.Animator:GetPlayingAnimationTracks()) do
+			v:Stop(0)
+		end
+		local clip = player.Character.Humanoid.Animator:LoadAnimation(reelAnim)
+		clip:Play()
+		
+		local line = rod:FindFirstChild("FishingLine")
+		if line then
+			line:Destroy()
+		end
+		
+		hook.Position = rodEnd.Position
+		
+		player.Character:SetAttribute("Busy", false)
+		player.Character.Humanoid.WalkSpeed = player.Character:GetAttribute("Speed") + modScript.getSpeedBuffs(player.Character)
+		player.Character.Humanoid.JumpPower = 50
+		player.Character.Humanoid.AutoRotate = true
+		rs.RemoteEvents.UIEvents.LockMouseEvent:FireClient(player, false)
+		
+		
+	end
+end)
+
