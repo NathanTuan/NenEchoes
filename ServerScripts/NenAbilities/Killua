@@ -1,9 +1,12 @@
 local rs = game:GetService("ReplicatedStorage")
-local modScript = require(game.ServerScriptService.ModuleScript)
+local runService = game:GetService("RunService")
+local GameModules = require(rs.GameModules)
+local GeneralModule = GameModules.GeneralModule
+local cdManager = GameModules.CooldownManagerModule
+local nenAbilityInfo = GameModules.NenAbilityInfoModule
 local animScript = require(script.Parent.NenAbilityAnimationManager)
-local ragdollModule = require(game.ServerScriptService.ragdollModule)
-local cdManager = require(rs.CooldownManager)
-local cdScript = require(rs.Cooldowns)
+local ragdollModule = GameModules.RagdollModule
+local statusEffectModule = require(rs.NenAbilityStatusEffectsModule)
 
 local Z = rs.RemoteEvents.NenAbilities.KilluaMoves.Z
 local X = rs.RemoteEvents.NenAbilities.KilluaMoves.X
@@ -15,73 +18,14 @@ local radius = 10
 local yOffset = 0.1
 local tweenService = game:GetService("TweenService")
 
-local spawnFlyParts = function(hit)
-	local debris = game:GetService("Debris")
-	local radius = 8
-	local segments = 20
-	local center = hit.Parent.PrimaryPart.Position
-
-	for i = 1, segments do
-		local angle = (2 * math.pi / segments) * i
-		local x = math.cos(angle) * radius
-		local z = math.sin(angle) * radius
-		local pos = center + Vector3.new(x, -3, z)
-		local newSize = math.random(0.2, 2.6)
-		local part = Instance.new("Part")
-		part.Size = Vector3.new(newSize, newSize, newSize)
-		part.Position = pos
-		part.CFrame = CFrame.lookAt(pos, center)
-		part.Anchored = false
-		part.CanCollide = true
-		part.Material = Enum.Material.Basalt
-		part.Color = Color3.fromRGB(60, 60, 60)
-	
-		part.AssemblyAngularVelocity = Vector3.new(math.random(), math.random(), math.random()) * 10 -- spin
-		local outwardDir = (pos - center).Unit
-		local upwardDir = Vector3.new(0, 1, 0)
-		local burstDir = (outwardDir + upwardDir).Unit
-
-
-		part.AssemblyLinearVelocity = burstDir * math.random(25, 35)
-		part.Parent = workspace
-
-		debris:AddItem(part, 3)
-	end
-end
-
-local spawnCircleParts = function(hit)
-	local tInfo = TweenInfo.new(0.2, Enum.EasingStyle.Linear, Enum.EasingDirection.In)
-	for i = 1, segments do
-		local angle = (2 * math.pi / segments) * i
-		local x = math.cos(angle) * radius
-		local z = math.sin(angle) * radius
-		local yRot = math.random(20, 45)
-		local pos = hit.Parent.PrimaryPart.Position + Vector3.new(x, -3, z)
-
-
-
-		local part = Instance.new("Part")
-		part.Size = Vector3.new(math.random(2, 5), math.random(1, 2), math.random(1, 3))
-		part.CFrame = CFrame.lookAt(hit.Parent.PrimaryPart.Position + Vector3.new(0, -2, 0), pos)
-		part.CFrame *= CFrame.Angles(math.rad(math.random(0, 45)), 0, 0)
-		part.Position = pos
-		part.Anchored = true
-		part.CanCollide = false
-		part.Material = Enum.Material.Basalt
-		part.Color = Color3.fromRGB(60, 60, 60)
-		part.Parent = workspace
-		game:GetService("Debris"):AddItem(part, 4)
-		local tween = tweenService:Create(part, tInfo, {Position = part.Position + Vector3.new(0, 1, 0)}):Play()
-		task.spawn(function()
-			task.wait(4)
-			local tween2 = tweenService:Create(part, tInfo, {Position = part.Position + Vector3.new(0, -3, 0)}):Play()
-		end)
-
-
-	end
-end
 
 local function handCrackle(player, timeDur)
+	local sfx = rs.SFX.NenAbilities.Killua["GodspeedSFX (1)"]:Clone()
+	sfx.Parent = player.Character.PrimaryPart
+	sfx.Looped = true
+	sfx:Play()
+	game:GetService("Debris"):AddItem(sfx, timeDur)
+	
 	local leftVFX = rs.VFX.KilluaVFX.HandCrackle:Clone()
 	leftVFX.Position = player.Character["Left Arm"].Position
 	leftVFX.Parent = player.Character["Left Arm"]
@@ -104,11 +48,11 @@ local function handCrackle(player, timeDur)
 end
 
 Z.OnServerEvent:Connect(function(player, target)
-	local checks = modScript.checkAll(player)
+	local checks = GeneralModule.checkAll(player)
 	if checks == false or player.Character:GetAttribute("Busy") == true then return end
-	if cdManager.IsOnCooldown(player, "Z") == true or player.Character:GetAttribute("Nen") < cdScript.Killua.Z.Cost then return end
-	player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")-cdScript.Killua.Z.Cost)
-	rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, cdScript.Killua.Z.Cost)
+	if cdManager.IsOnCooldown(player, "Z") == true or cdManager.HasEnoughNen(player, "Z") == false then return end
+	player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")-nenAbilityInfo.Killua.Z.Cost)
+	rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, nenAbilityInfo.Killua.Z.Cost)
 	
 	player.Character:SetAttribute("Busy", true)
 	
@@ -135,47 +79,28 @@ Z.OnServerEvent:Connect(function(player, target)
 	local hitPlayers = {}
 	
 	for _, hit in hits do
-
+		if not hit.Parent then return end
 		local hum = hit.Parent:FindFirstChild("Humanoid")
 		if hum and not hitPlayers[hit.Parent] then
 			hitPlayers[hit.Parent] = true
-			modScript.applyAttackingState(player.Character, 1.3)
+			GeneralModule.applyAttackingState(player.Character, 1.3)
 			anims.thunderboltClip:Play()
-		
 			
-			local bool = modScript.checkInterruption(player.Character, anims.thunderboltClip.Length+0.2)
+			
+			local bool = GeneralModule.checkInterruption(player.Character, 0.7333)
 			if bool then
-				local damage = cdScript.Killua.Z.Damage
+				local damage = nenAbilityInfo.Killua.Z.Damage
 				local blockingDamage = math.floor((damage/2)*10+0.5)/10
 
 				anims.thunderboltClip2:Play()
 				task.wait(0.3)
 				if hit.Parent:GetAttribute("Parrying") == true then
-					local parryFX = rs.VFX.CombatVFX.parryFX:Clone()
-					parryFX.Position = hit.Parent.PrimaryPart
-					parryFX.Parent = game.Workspace
-					task.wait(0.05)
-					game:GetService("Debris"):AddItem(parryFX, 1)
-					for _, v in pairs(parryFX:GetChildren()) do
-						if v:IsA("ParticleEmitter") then
-							v:Emit(v:GetAttribute("EmitCount"))
-						end
-					end
+					statusEffectModule.ApplyStatusEffects(player, "Killua", "Z", hit.Parent.PrimaryPart, "Parried")
 				elseif hit.Parent:GetAttribute("Blocking") == true then
-					hum:TakeDamage(blockingDamage)
-					modScript.damageLooks(player, hit, blockingDamage)
-					rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, blockingDamage)
-					
+					statusEffectModule.ApplyStatusEffects(player, "Killua", "Z", hit.Parent.PrimaryPart, "Blocked")
 				else
-					hum:TakeDamage(damage)
-					modScript.damageLooks(player, hit, damage)
-					rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, damage)
-					modScript.stun(hit.Parent, 2)
-					ragdollModule:Ragdoll(hit.Parent, 2)
+					statusEffectModule.ApplyStatusEffects(player, "Killua", "Z", hit.Parent.PrimaryPart, "Hit")
 				end
-				
-				
-			
 				
 				local currentCFrame = hrp.CFrame
 				local startPos = hit.Parent.PrimaryPart.Position + Vector3.new(0, 2, 0)
@@ -208,15 +133,24 @@ Z.OnServerEvent:Connect(function(player, target)
 					end
 				end
 				
+
+				GeneralModule.spawnCrater(hit.Parent.PrimaryPart)
+
+				local explosionVFX = rs.VFX.CombatVFX.ExplosionVFX:Clone()
+				explosionVFX.Position = hit.Parent.PrimaryPart.Position + Vector3.new(0, -1.2, 0)
+				explosionVFX.Parent = game.Workspace
+				task.spawn(function()
+					game.Debris:AddItem(explosionVFX, 2)
+					task.wait(0.1)
+					for _, emitter in pairs(explosionVFX.Attachment:GetChildren()) do
+						emitter:Emit(25)
+					end
+				end)
 				
-				--spawnCircleParts(hit)
-				spawnFlyParts(hit)
-				local debrisVFX = rs.VFX.CombatVFX.ExplosionDebris:Clone()
-				debrisVFX.Position = hit.Parent.PrimaryPart.Position+Vector3.new(0, -1, 0)
-				debrisVFX.Parent = game.Workspace
-				task.wait(0.03)
-				debrisVFX.Attachment.Dust:Emit(3)
-				
+				local sfx = rs.SFX.NenAbilities.Killua.ThunderboltSFX:Clone()
+				sfx.Parent = player.Character.PrimaryPart
+				sfx:Play()
+				game:GetService("Debris"):AddItem(sfx, sfx.TimeLength)
 				
 				local lv = Instance.new("LinearVelocity")
 				lv.RelativeTo = Enum.ActuatorRelativeTo.World
@@ -237,19 +171,19 @@ Z.OnServerEvent:Connect(function(player, target)
 		end
 	end
 	--print("Missed")
-	cdManager.SetCooldown(player, "Z", cdScript.Killua.Z.Cooldown)
-	UICDEvent:FireClient(player, "Z", cdScript.Killua.Z.Cooldown)
+	cdManager.SetCooldown(player, "Z", nenAbilityInfo.Killua.Z.Cooldown)
+	UICDEvent:FireClient(player, "Z", nenAbilityInfo.Killua.Z.Cooldown)
 	player.Character:SetAttribute("Busy", false)
 end)
 
 X.OnServerEvent:Connect(function(player, target)
-	local checks = modScript.checkAll(player)
+	local checks = GeneralModule.checkAll(player)
 	if checks == false or player.Character:GetAttribute("Busy") == true then return end
-	if cdManager.IsOnCooldown(player, "X") == true or player.Character:GetAttribute("Nen") < cdScript.Killua.X.Cost then return end
-	player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")-cdScript.Killua.X.Cost)
-	rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, cdScript.Killua.X.Cost)
-	cdManager.SetCooldown(player, "X", cdScript.Killua.X.Cooldown)
-	UICDEvent:FireClient(player, "X", cdScript.Killua.X.Cooldown)
+	if cdManager.IsOnCooldown(player, "X") == true or cdManager.HasEnoughNen(player, "X") == false then return end
+	player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")-nenAbilityInfo.Killua.X.Cost)
+	rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, nenAbilityInfo.Killua.X.Cost)
+	cdManager.SetCooldown(player, "X", nenAbilityInfo.Killua.X.Cooldown)
+	UICDEvent:FireClient(player, "X", nenAbilityInfo.Killua.X.Cooldown)
 
 	--local canContinue= true
 	local hrp = player.Character.PrimaryPart
@@ -258,27 +192,28 @@ X.OnServerEvent:Connect(function(player, target)
 	
 	local anims = animScript:GetAnimations(player.Character)
 	
-	
+	GeneralModule.setCollisionGroup(player.Character, 2)
 	anims.palmChargeClip:Play()
 	
 	
 	
-	--modScript.stun(player.Character, clip.Length)
+	--GeneralModule.stun(player.Character, clip.Length)
 	
-	handCrackle(player, 1)
+	handCrackle(player, 1.32)
 	
-	modScript.applyAttackingState(player.Character, 1)
+	GeneralModule.applyAttackingState(player.Character, 1)
 	player.Character:SetAttribute("Cooldown", true)
-	task.delay(anims.palmChargeClip.Length + anims.palmRushClip.Length, function()
+	task.delay(1.32, function()
 		player.Character:SetAttribute("Cooldown", false)
 	end)
-	local bool = modScript.checkInterruption(player.Character, anims.palmChargeClip.Length)
+	local bool = GeneralModule.checkInterruption(player.Character, 0.66)
 	if bool then
 		anims.palmRushClip:Play()
-		--modScript.knockback(player.Character, player.Character, 70)
+		--GeneralModule.knockback(player.Character, player.Character, 70)
+		--GeneralModule.setCollisionGroup(player.Character, 1.5)
 		local hrpLook = hrp.CFrame.LookVector
 		local dir = Vector3.new(hrpLook.X, 0, hrpLook.Z)
-		local speed = 280
+		local speed = 200
 		hrp.AssemblyLinearVelocity = dir*speed
 
 		
@@ -292,24 +227,32 @@ X.OnServerEvent:Connect(function(player, target)
 		m6D.Part1 = hitbox
 		
 		hrp.CFrame = CFrame.lookAt(hrp.Position, vectorGoal)
-
-		game:GetService("Debris"):AddItem(hitbox, 0.5)
+		local conn
+		task.delay(0.8, function()
+			conn:Disconnect()
+			hitbox:Destroy()
+		end)
 
 		local hitboxParams = OverlapParams.new()
 		hitboxParams.FilterType = Enum.RaycastFilterType.Exclude
 		hitboxParams.FilterDescendantsInstances = {player.Character, hitbox}
 		local hitPlayers = {}
-		for i=1, 10, 1 do
+		
+		conn = runService.Heartbeat:Connect(function()
 			local hits = workspace:GetPartBoundsInBox(hitbox.CFrame, hitbox.Size, hitboxParams)
-			
-			
+
+
 			for _, hit in hits do
+				if not hit.Parent then continue end
 				local hum = hit.Parent:FindFirstChild("Humanoid")
 				if hum and not hitPlayers[hum.Parent] then
 					hitPlayers[hum.Parent] = true
-					local damage = cdScript.Killua.X.Damage
-					local blockingDamage = math.floor((damage/2)*10+0.5)/10
-					
+
+					local sfx = rs.SFX.NenAbilities.Killua.PalmSFX:Clone()
+					sfx.Parent = player.Character.PrimaryPart
+					sfx:Play()
+					game:GetService("Debris"):AddItem(sfx, sfx.TimeLength)
+
 					local palmVFX = rs.VFX.KilluaVFX.ThunderPalmHit:Clone()
 					palmVFX.Position = hit.Parent.PrimaryPart.Position + Vector3.new(0, 1, 0)
 					--palmVFX.Zone.Position = hit.Parent.PrimaryPart.Position
@@ -325,59 +268,112 @@ X.OnServerEvent:Connect(function(player, target)
 							end
 						end
 					end)
-					
-					
-					if hit.Parent:GetAttribute("Parrying") == true then
-						local parryFX = rs.VFX.CombatVFX.parryFX:Clone()
-						parryFX.Position = hit.Parent.PrimaryPart.Position
-						parryFX.Parent = game.Workspace
-						task.wait(0.05)
-						game:GetService("Debris"):AddItem(parryFX, 1)
-						for _, v in pairs(parryFX:GetChildren()) do
-							if v:IsA("ParticleEmitter") then
-								v:Emit(v:GetAttribute("EmitCount"))
-							end
-						end
-					elseif hit.Parent:GetAttribute("Blocking") == true then
-						hum:TakeDamage(blockingDamage)
-						modScript.damageLooks(player, hit, blockingDamage)
-						ragdollModule:Ragdoll(hit.Parent, 1.7)
-						modScript.knockback(player.Character, hit.Parent, 10)
-						modScript.stun(hit.Parent, 1.7)
-						modScript.blockbreak(hit.Parent)
-						rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, blockingDamage)
 
+
+					if hit.Parent:GetAttribute("Parrying") == true then
+						statusEffectModule.ApplyStatusEffects(player, "Killua", "X", hit.Parent.PrimaryPart, "Parried")
+					elseif hit.Parent:GetAttribute("Blocking") == true then
+						statusEffectModule.ApplyStatusEffects(player, "Killua", "X", hit.Parent.PrimaryPart, "Blocked")
 					else
-						hum:TakeDamage(damage)
-						modScript.damageLooks(player, hit, damage)
-						ragdollModule:Ragdoll(hit.Parent, 1.7)
-						modScript.knockback(player.Character, hit.Parent, 30)
-						modScript.stun(hit.Parent, 1.7)
-						rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, damage)
+						statusEffectModule.ApplyStatusEffects(player, "Killua", "X", hit.Parent.PrimaryPart, "Hit")
 					end
-					
-					
+
+
 				end
 			end
-			task.wait(0.1)
-		end
+			--task.wait(0.1)
+		end)
+		
 		
 	end
 end)
-
+--
 C.OnServerEvent:Connect(function(player, target)
-	local checks = modScript.checkAll(player)
-	if checks == false and player.Character:GetAttribute("Busy") == true or player.Character:GetAttribute("GodSpeed") == true then return end
-	if cdManager.IsOnCooldown(player, "C") == true or player.Character:GetAttribute("Nen") < cdScript.Killua.C.Cost then return end
-	cdManager.SetCooldown(player, "C", cdScript.Killua.C.Cooldown)
-	player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")-cdScript.Killua.C.Cost)
-	rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, cdScript.Killua.C.Cost)
-	UICDEvent:FireClient(player, "C", cdScript.Killua.C.Cooldown)
+	local checks = GeneralModule.checkAll(player)
+	if checks == false or player.Character:GetAttribute("Busy") == true or player.Character:GetAttribute("GodSpeed") == true then return end
+	if cdManager.IsOnCooldown(player, "C") == true or cdManager.HasEnoughNen(player, "C") == false then return end
+	cdManager.SetCooldown(player, "C", nenAbilityInfo.Killua.C.Cooldown)
+	player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")-nenAbilityInfo.Killua.C.Cost)
+	rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, nenAbilityInfo.Killua.C.Cost)
+	UICDEvent:FireClient(player, "C", nenAbilityInfo.Killua.C.Cooldown)
 	local active = true
-	player.Character:SetAttribute("SpeedBuff", 12)
+	GeneralModule.addSpeedBuff(player, "GodSpeedBuff", 12)
 	player.Character:SetAttribute("GodSpeed", true)
-	rs.RemoteEvents.MovementEvents.MoveEndEvent:FireClient(player)
+	--rs.RemoteEvents.MovementEvents.MoveEndEvent:FireClient(player)
+	player.Character:SetAttribute("MovementBlocked", true)
+	player.Character.Humanoid.WalkSpeed = 0
+	player.Character.Humanoid.JumpPower = 0
+	
+	rs.RemoteEvents.UIEvents.LockMouseEvent:FireClient(player, true)	
+	local anims = animScript:GetAnimations(player.Character)
+	anims.godspeedTransformationClip:Play()
+	rs.RemoteEvents.NenAbilities.KilluaMoves.C:FireClient(player)
+	
+	task.spawn(function()
+		local alignPosition = Instance.new("AlignPosition")
+		alignPosition.Parent = player.Character.HumanoidRootPart
+		alignPosition.Attachment0 = player.Character.HumanoidRootPart.dashAtt
+		alignPosition.Mode = Enum.PositionAlignmentMode.OneAttachment
+		alignPosition.MaxForce = math.huge
+		alignPosition.Responsiveness = 5
+		alignPosition.Position = player.Character.HumanoidRootPart.Position + Vector3.new(0, 6, 0)
 
+		-- slowly lift upward
+		task.wait(1.8)
+		alignPosition:Destroy()
+	end)
+	
+	
+	local windVFX = rs.VFX.GonVFX.Rock.WindForCharacter:Clone()
+	windVFX.Parent = player.Character
+	windVFX.Position = player.Character.HumanoidRootPart.Position
+	windVFX.Anchored = false
+	local m6D = Instance.new("Motor6D", windVFX)
+	m6D.Part0 = player.Character.HumanoidRootPart
+	m6D.Part1 = windVFX
+	for _, v in pairs(windVFX:GetDescendants()) do
+		if v:IsA("ParticleEmitter") then
+			v.Enabled = true
+		end
+	end
+	
+	game:GetService("Debris"):AddItem(windVFX, 2)
+	task.wait(1.2)
+	
+	local thunderboltVFX = rs.VFX.KilluaVFX.Thunderbolt:Clone()
+	thunderboltVFX.Position = player.Character.PrimaryPart.Position
+	thunderboltVFX.Parent = game.Workspace
+	game:GetService("Debris"):AddItem(thunderboltVFX, 5)
+	task.wait(0.05)
+	for _, v in pairs(thunderboltVFX:GetChildren()) do
+		if v:IsA("Attachment") then
+			for _, j in pairs(v:GetChildren()) do
+				j:Emit(j:GetAttribute("EmitCount"))
+			end
+		end
+	end
+
+
+	GeneralModule.spawnCrater(player.Character.PrimaryPart)
+
+	local explosionVFX = rs.VFX.CombatVFX.ExplosionVFX:Clone()
+	explosionVFX.Position = player.Character.PrimaryPart.Position + Vector3.new(0, -1.2, 0)
+	explosionVFX.Parent = game.Workspace
+	task.spawn(function()
+		game.Debris:AddItem(explosionVFX, 2)
+		task.wait(0.1)
+		for _, emitter in pairs(explosionVFX.Attachment:GetChildren()) do
+			emitter:Emit(25)
+		end
+	end)
+	task.wait(0.5)
+	--rs.RemoteEvents.MovementEvents.MoveEndEvent:FireClient(player)
+
+	player.Character:SetAttribute("MovementBlocked", false)
+	player.Character.Humanoid.WalkSpeed = player.Character:GetAttribute("Speed") + GeneralModule.getSpeedBuffs(player.Character)
+	player.Character.Humanoid.JumpPower = 50
+	
+	rs.RemoteEvents.UIEvents.LockMouseEvent:FireClient(player, false)	
 	
 	for _, parts in pairs(rs.VFX.KilluaVFX["GodSpeed Aura 2"]:GetChildren()) do
 		if parts.Name ~= "HumanoidRootPart" then
@@ -387,24 +383,35 @@ C.OnServerEvent:Connect(function(player, target)
 			end
 		end
 	end	
+	
+	local char = player.Character
+	while char do
+		local num = math.random(1, 3)
+		local sfx = rs.SFX.NenAbilities.Killua["GodspeedSFX ("..tostring(num)..")"]:Clone()
+		sfx.Parent = player.Character.PrimaryPart
+		sfx.Volume = 0.25
+		sfx:Play()
+		game:GetService("Debris"):AddItem(sfx, sfx.TimeLength+1)
+		task.wait(sfx.TimeLength)
+	end
 end)
 
 
 
 rs.RemoteEvents.NenAbilities.KilluaMoves.V.OnServerEvent:Connect(function(player, target)
-	local checks = modScript.checkAll(player)
+	local checks = GeneralModule.checkAll(player)
 	if checks == false or player.Character:GetAttribute("Busy") == true then return end
-	if cdManager.IsOnCooldown(player, "V") or player.Character:GetAttribute("Nen") < cdScript.Killua.V.Cost then return end
+	if cdManager.IsOnCooldown(player, "V") or cdManager.HasEnoughNen(player, "V") == false then return end
 	
-	cdManager.SetCooldown(player, "V", cdScript.Killua.V.Cooldown)
-	UICDEvent:FireClient(player, "V", cdScript.Killua.V.Cooldown)
-	player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")-cdScript.Killua.V.Cost)
-	rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, cdScript.Killua.V.Cost)
+	cdManager.SetCooldown(player, "V", nenAbilityInfo.Killua.V.Cooldown)
+	UICDEvent:FireClient(player, "V", nenAbilityInfo.Killua.V.Cooldown)
+	player.Character:SetAttribute("Nen", player.Character:GetAttribute("Nen")-nenAbilityInfo.Killua.V.Cost)
+	rs.RemoteEvents.NenAbilities.ConsumeNenEvent:FireClient(player, nenAbilityInfo.Killua.V.Cost)
 	local hrp = player.Character.PrimaryPart
 	local dir = hrp.CFrame.LookVector*2
 	
 
-	modScript.applyAttackingState(player.Character, 1.6)
+	GeneralModule.applyAttackingState(player.Character, 1.6)
 	player.Character:SetAttribute("Busy", true)
 	handCrackle(player, 1)
 	
@@ -436,11 +443,11 @@ rs.RemoteEvents.NenAbilities.KilluaMoves.V.OnServerEvent:Connect(function(player
 		
 		local hitPlayers = {}
 		local hitSomeone = false
-		
-		for i=1, 10, 1 do
+		for i=1, 7, 1 do
 			local hits = workspace:GetPartBoundsInBox(hitbox.CFrame, hitbox.Size, hitboxParams)
 		
 			for _, hit in hits do
+				if not hit.Parent then return end
 				local hum = hit.Parent:FindFirstChild("Humanoid")
 				if hum and not hitPlayers[hit.Parent] then
 					
@@ -460,9 +467,9 @@ rs.RemoteEvents.NenAbilities.KilluaMoves.V.OnServerEvent:Connect(function(player
 					
 					--player.Character:SetAttribute("Busy", true)
 					player.Character.Humanoid.WalkSpeed = 0
-					modScript.setCollisionGroup(hit.Parent,4)
-					modScript.setCollisionGroup(player.Character, 4)
-					modScript.stun(hit.Parent, 4)
+					GeneralModule.setCollisionGroup(hit.Parent,4)
+					GeneralModule.setCollisionGroup(player.Character, 4)
+					GeneralModule.stun(hit.Parent, 4)
 					hitPlayers[hit.Parent] = true
 					hitSomeone = true
 					handCrackle(player, 4)
@@ -474,7 +481,7 @@ rs.RemoteEvents.NenAbilities.KilluaMoves.V.OnServerEvent:Connect(function(player
 					local clip = hum.Animator:LoadAnimation(anim)
 					clip:Play()
 					
-					local damage = cdScript.Killua.V.Damage
+					local damage = nenAbilityInfo.Killua.V.Damage
 					local blockingDamage = math.floor((damage/2)*10+0.5)/10
 					
 					task.spawn(function()
@@ -482,14 +489,14 @@ rs.RemoteEvents.NenAbilities.KilluaMoves.V.OnServerEvent:Connect(function(player
 							if i == 7 then
 								lv:Destroy()
 								lv2:Destroy()
-								modScript.damageLooks(player, hit, damage)
+								GeneralModule.damageLooks(player, hit, damage)
 								hum:TakeDamage(damage)
 								rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, damage)
-								modScript.knockback(player.Character, hit.Parent, 30)
+								GeneralModule.knockback(player.Character, hit.Parent, 30)
 								ragdollModule:Ragdoll(hit.Parent, 1)
 								
 							else
-								modScript.damageLooks(player, hit, damage)
+								GeneralModule.damageLooks(player, hit, damage)
 								hum:TakeDamage(damage)
 								rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, damage)
 							end
@@ -508,6 +515,12 @@ rs.RemoteEvents.NenAbilities.KilluaMoves.V.OnServerEvent:Connect(function(player
 									end
 								end
 							end)
+							
+							local sfx = rs.SFX.NenAbilities.Killua.PalmSFX:Clone()
+							sfx.Parent = player.Character.PrimaryPart
+							sfx:Play()
+							game:GetService("Debris"):AddItem(sfx, sfx.TimeLength)
+							
 							task.wait(0.5)
 						end
 						--anims.thunderHurtClip:Stop()
