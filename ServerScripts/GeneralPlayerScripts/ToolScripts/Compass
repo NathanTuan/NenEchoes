@@ -1,0 +1,56 @@
+local ss = game:GetService("ServerStorage")
+local rs = game:GetService("ReplicatedStorage")
+local GameModules = require(rs.GameModules)
+local GeneralModule = GameModules.GeneralModule
+
+
+
+
+local OPEN_ANGLE = -72-50
+local ANIMATION_SPEED = 0.4
+
+
+
+rs.RemoteEvents.ToolEvents.CompassEvent.OnServerEvent:Connect(function(player, bool)
+	print(tostring(bool))
+	local compass = player.Character:FindFirstChild("Compass")
+	local pivot = compass.Parts:WaitForChild("Pivot")
+	local upperLid = compass.Parts:WaitForChild("UpperLid")
+	local bottom = compass.Parts:WaitForChild("BottomLid")
+	local m6D = pivot.Motor6D
+	local m6DRest = CFrame.new(0.75, 0.1, 0) * CFrame.Angles(0, 0, 0)
+	
+	if bool then
+		openCompass(m6D, m6DRest)
+		
+	else
+		closeCompass(m6D, m6DRest)
+	end
+end)
+
+function openCompass(m6D, m6DRest)
+	local startTime = tick()
+	while tick() - startTime < ANIMATION_SPEED do
+		local progress = (tick() - startTime) / ANIMATION_SPEED
+		local currentAngle = math.lerp(0, OPEN_ANGLE, progress)
+		m6D.C0 = m6DRest * CFrame.Angles(0, 0, math.rad(currentAngle))
+		game:GetService("RunService").Heartbeat:Wait()
+	end
+	m6D.C0 = m6DRest * CFrame.Angles(0, 0, math.rad(OPEN_ANGLE))
+end
+
+ function closeCompass(m6D, m6DRest)
+	local startTime = tick()
+	while tick() - startTime < ANIMATION_SPEED do
+		local progress = (tick() - startTime) / ANIMATION_SPEED
+		local currentAngle = math.lerp(OPEN_ANGLE, 0, progress)
+		m6D.C0 = m6DRest * CFrame.Angles(0, 0, math.rad(currentAngle))
+		game:GetService("RunService").Heartbeat:Wait()
+	end
+	m6D.C0 = m6DRest
+end
+
+function createArrow()
+	
+end
+
