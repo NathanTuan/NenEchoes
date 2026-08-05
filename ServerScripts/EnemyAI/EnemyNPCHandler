@@ -1,16 +1,22 @@
 local CollectionService = game:GetService("CollectionService")
+local PhysicsService = game:GetService("PhysicsService")
+local tweenService = game:GetService("TweenService")
 local rs = game:GetService("ReplicatedStorage")
 local ss = game:GetService("ServerStorage")
 local pathfindingService = game:GetService("PathfindingService")
-local modScript = require(game.ServerScriptService.ModuleScript)
-local ragdollModule = require(game.ServerScriptService.ragdollModule)
+
+local GameModules = require(rs.GameModules)
+local GeneralModule = GameModules.GeneralModule
+local ragdollModule = GameModules.RagdollModule
 local enemyNPCModule = require(script.Parent.EnemyNPCModule)
+
 local hitPlayers = {}
 local enemyNPCSHitContribution = {}
 local enemyNPCAnims = {}
 local initializedDummies = {}
-local enemyAnims = require(game.ServerScriptService.enemyNPCAnims)
-local questInfo = require(rs.QuestText)
+local GameModules = require(rs.GameModules)
+local enemyAnims = require(game.ServerScriptService.EnemyHandler.enemyNPCAnims)
+local questInfo = GameModules.QuestTextModule
 
 --Datastore module stuff
 local inventoryModule = require(ss.DataStoreModules.InventoryModule)
@@ -102,11 +108,17 @@ local function initDummy(dummy)
 	local hrp = dummy.PrimaryPart
 	if not humanoid or initializedDummies[dummy] then return end
 	
+	local islandID = dummy.Parent.Parent.Parent.Name
+	local batchID = dummy.Parent.Parent.Name
+	local questName = dummy.Parent.Name
+	
+	
 	
 	initializedDummies[dummy] = true
 	dummy:SetAttribute("Health", 100)
 	dummy:SetAttribute("Died", false)
 	dummy:SetAttribute("RagdollTime", 0)
+	dummy:SetAttribute("Ragdolled", false)
 	dummy:SetAttribute("Attacking", false)
 	dummy:SetAttribute("Blocking", false)
 	dummy:SetAttribute("Coins", 15)
@@ -114,8 +126,29 @@ local function initDummy(dummy)
 	dummy:SetAttribute("Cooldown", false)
 	dummy:SetAttribute("Speed", 20)
 	dummy:SetAttribute("Stunned", false)
+	dummy:SetAttribute("StunnedTime", 0)
 	dummy:SetAttribute("XP", 100)
+	dummy:SetAttribute("Hyperarmor", false)
+	dummy:SetAttribute("Incapacitated", false)
 	
+	local bool = PhysicsService:IsCollisionGroupRegistered("NormalPlayerCollide")
+	while not bool do
+		bool = PhysicsService:IsCollisionGroupRegistered("NormalPlayerCollide")
+		task.wait(1)
+	end
+	for _, descendant in dummy:GetDescendants() do
+		if descendant:IsA("BasePart") or descendant:IsA("MeshPart") then
+			descendant.CollisionGroup = "NormalPlayerCollide"
+		end
+	end
+	
+	local lastRagdolled = tick()
+	local ragdollConn
+	ragdollConn = dummy:GetAttributeChangedSignal("Ragdolled"):Connect(function()
+		if dummy:GetAttribute("Ragdolled") == false then
+			lastRagdolled = tick()
+		end
+	end)
 
 	if not enemyNPCSHitContribution[dummy] then
 		enemyNPCSHitContribution[dummy] = {}
@@ -154,79 +187,81 @@ local function initDummy(dummy)
 				end
 			end)
 		end
-	end)
-	
-	-- Death stuff
-	local deathConn
-	deathConn = humanoid.Died:Connect(function()
-		modScript.unstun(dummy)
-		ragdollModule:Unragdoll(dummy)
-		local hrpPos = hrp.Position
-		local lookVector = hrp.CFrame.LookVector
-		local name = dummy.Name
 		
-		deathConn:Disconnect()
-		deathConn = nil
-		heathConn:Disconnect()
-		heathConn = nil
-		prevHealth = nil
 		
-		dummy.Torso.Anchored = true
-		
-		for _, v in pairs(dummy:GetChildren()) do
-			if v:IsA("BasePart") then
-				v.Transparency = 0
-			end
-		end
-		
-		if not dummy:GetAttribute("Died") then
-			dummy:SetAttribute("Died", true)
-			local islandID = string.sub(dummy.Parent.Parent.Name, -1)
-			local batchID = string.sub(dummy.Parent.Name, -1)
-			if enemyNPCSHitContribution[dummy] then
-				for player, damage in pairs(enemyNPCSHitContribution[dummy]) do
-					if game.Workspace:FindFirstChild(player.Name) then
-						spawnXPOrb(hrpPos, lookVector, player)
-						rs.StatRemoteEvents.XP:FireClient(player, dummy:GetAttribute("XP"))
-						inventoryModule.UpdateInventory(player, "Gold", dummy:GetAttribute("Gold"))
-						local quest = player.Quests:FindFirstChild("Island"..islandID)
-						if quest then
-							local batch = quest:FindFirstChild("Batch"..batchID)
-							if batch then
-								local progress = batch:FindFirstChild("Progress")
-								if progress then
-									progress.Value = progress.Value + 1
-									--print("Should increment progress")
+		if newHealth <= 0 then
+			ragdollModule:Ragdoll(dummy, 100)
+			GeneralModule.knockback(dummy, dummy, 10)
+			
+			
+			local hrpPos = hrp.Position
+			local lookVector = hrp.CFrame.LookVector
+			local name = dummy.Name
+			heathConn = nil
+			dummy:SetAttribute("Incapacitated", true)
+			local hurtClip = dummy.Humanoid.Animator:LoadAnimation(rs.Animations.HurtAnims.GripAnimation)
+			hurtClip.Looped = true
+			hurtClip:Play()
+			--prevHealth = nil
+
+			--dummy.Torso.Anchored = true
+			task.wait(1)
+			
+
+
+
+			if not dummy:GetAttribute("Died") then
+				dummy:SetAttribute("Died", true)
+				
+				if enemyNPCSHitContribution[dummy] then
+					for player, damage in pairs(enemyNPCSHitContribution[dummy]) do
+						if game.Workspace:FindFirstChild(player.Name) then
+							spawnXPOrb(hrpPos, lookVector, player)
+							rs.StatRemoteEvents.XP:FireClient(player, dummy:GetAttribute("XP"))
+							inventoryModule.UpdateInventory(player, "Gold", dummy:GetAttribute("Gold"))
+							local quest = player.Quests:FindFirstChild(islandID)
+							if quest then
+								local batch = quest:FindFirstChild(batchID)
+								if batch then
+									local progress = batch:FindFirstChild(dummy.Parent.Name.."Progress")
+									if progress then
+										progress.Value = progress.Value + 1
+										print("Should increment progress")
+									end
 								end
 							end
 						end
-					end
-					
-					
-				end
-				
-			end
-			task.delay(7, function()
-				local clone = ss.EnemyNPCS["Island"..tostring(islandID)]["Batch"..tostring(batchID)].EnemyNPC:Clone()
-				clone.Name = name
-				local spawnPos = game.Workspace.EnemyNPCS.Island1.Batch1["EnemySpawn"..string.sub(name, -1).."Pos"]
-				if spawnPos then
-					clone.PrimaryPart.CFrame = spawnPos.CFrame
-					clone.Parent = game.Workspace.EnemyNPCS["Island"..tostring(islandID)]["Batch"..tostring(batchID)]
-				end
-			end)
-			enemyNPCAnims[dummy] = nil
-			enemyNPCSHitContribution[dummy] = nil
-			initializedDummies[dummy] = nil
-			
 
-			game:GetService("Debris"):AddItem(dummy, 0.1)
+
+					end
+
+				end
+				--[[
+				task.delay(7, function()
+					local clone = ss.EnemyNPCS[islandID][batchID][questName].EnemyNPC:Clone()
+					clone.Name = name
+					local spawnPos = game.Workspace.EnemyNPCS[islandID][batchID][questName]["EnemySpawn"..string.sub(name, -1).."Pos"]
+					if spawnPos then
+						clone.PrimaryPart.CFrame = spawnPos.CFrame
+						clone.Parent = game.Workspace.EnemyNPCS[islandID][batchID][questName]
+					end
+				end)
+				]]
+				enemyNPCAnims[dummy] = nil
+				enemyNPCSHitContribution[dummy] = nil
+				initializedDummies[dummy] = nil
+
+
+				--game:GetService("Debris"):AddItem(dummy, 3)
+			end
 		end
 	end)
+	
+
 
 	-- Movement logic
 	task.spawn(function()
-		while dummy and dummy.Parent and humanoid.Health > 0 do
+		while dummy and dummy.Parent and humanoid.Health > 0 and dummy:GetAttribute("Incapacitated") == false do
 			local closest = nil
 			local minDistance = MaxDistance
 
@@ -268,7 +303,11 @@ local function initDummy(dummy)
 							humanoid:MoveTo(waypoint.Position)
 							local choice = math.random(0, 3)
 							if choice == 3 then
-								enemyNPCModule.roll(dummy, "Forward", enemyNPCAnims)
+								local curTime = tick()
+								if curTime - lastRagdolled > 2 then
+									enemyNPCModule.roll(dummy, "Forward", enemyNPCAnims)
+								end
+								
 							end
 						else
 							hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + dir.Unit*5)*CFrame.Angles(0, math.rad(180), 0)
@@ -295,11 +334,13 @@ local function initDummy(dummy)
 end
 
 -- Init existing NPCs
-for _, folders in ipairs(workspace.EnemyNPCS:GetChildren()) do
-	for _, folder in ipairs(folders:GetChildren()) do
-		for _, dummy in ipairs(folder:GetChildren()) do
+for _, island in ipairs(workspace.EnemyNPCS:GetChildren()) do
+	for _, batch in ipairs(island:GetChildren()) do
+		for _, quest in ipairs(batch:GetChildren()) do
+			for _, dummy in ipairs(quest:GetChildren()) do
+				initDummy(dummy)
+			end 
 			
-			initDummy(dummy)
 		end
 	end
 	
