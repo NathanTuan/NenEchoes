@@ -1,0 +1,69 @@
+local Players = game:GetService("Players")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+local rs = game:GetService("ReplicatedStorage")
+local player = Players.LocalPlayer
+
+local guiTable = {}
+local tweenService = game:GetService("TweenService")
+local tweenTime = 0.5
+
+local transpInfo = TweenInfo.new(0.4, Enum.EasingStyle.Linear, Enum.EasingDirection.In)
+local expandInfo = TweenInfo.new(0.8, Enum.EasingStyle.Quad, Enum.EasingDirection.InOut)
+local displayRange = 20
+local underlineSize = UDim2.new(0.75, 0,0.015, 0)
+local textSize = UDim2.new(1, 0, 0.3, 0)
+local symbolSize = UDim2.new(0.15, 0, 0.15, 0)
+
+local function openingTweens(guiObject)
+	task.spawn(function()
+		if not guiObject then return end
+		local nameLabel = guiObject.CanvasGroup.NameLabel
+		local transpTween = tweenService:Create(guiObject.CanvasGroup, transpInfo, {GroupTransparency = 0}):Play()
+		local expandTween2 = tweenService:Create(nameLabel, expandInfo, {Size = textSize}):Play()
+
+	end)
+end
+
+local function closingTweens(guiObject)
+	task.spawn(function()
+		if not guiObject then return end
+		local nameLabel = guiObject.CanvasGroup.NameLabel
+		local expandTween = tweenService:Create(nameLabel, expandInfo, {Size = UDim2.new(0, 0, textSize.Y.Scale, 0)}):Play()
+		local transpTween = tweenService:Create(guiObject.CanvasGroup, transpInfo, {GroupTransparency = 1}):Play()
+	end)
+end
+
+
+
+ProximityPromptService.PromptShown:Connect(function(prompt)
+	--print("Should show")
+	
+	local proximityPrompt = prompt
+	local promptGui = proximityPrompt.Parent.ProximityPromptGui
+	local tween = tweenService:Create(promptGui.CanvasGroup, TweenInfo.new(tweenTime), {GroupTransparency = 0})
+	tween:Play()
+	local sizeTween = tweenService:Create(promptGui.CanvasGroup, TweenInfo.new(tweenTime), {Size = UDim2.new(1, 0, 1, 0)}):Play()
+	
+	local guiObject = prompt.Parent.Parent:FindFirstChild("NameTag")
+	if guiObject then
+		openingTweens(guiObject)
+	end
+	
+end)
+
+ProximityPromptService.PromptHidden:Connect(function(prompt)
+	
+	local proximityPrompt = prompt
+	local promptGui = proximityPrompt.Parent.ProximityPromptGui
+	local tween = tweenService:Create(promptGui.CanvasGroup, TweenInfo.new(tweenTime), {GroupTransparency = 1})
+	tween:Play()
+	local sizeTween = tweenService:Create(promptGui.CanvasGroup, TweenInfo.new(tweenTime), {Size = UDim2.new(0, 0, 1, 0)}):Play()
+	
+	local guiObject = prompt.Parent.Parent:FindFirstChild("NameTag")
+	if guiObject then
+		closingTweens(guiObject)
+	end
+end)
+
+
+
