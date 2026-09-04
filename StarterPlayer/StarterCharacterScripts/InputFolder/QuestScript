@@ -1,0 +1,134 @@
+local Players = game:GetService("Players")
+local ProximityPromptService = game:GetService("ProximityPromptService")
+local rs = game:GetService("ReplicatedStorage")
+local tweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local camera = workspace.CurrentCamera
+
+
+local GameModules = require(rs.GameModules)
+local zabanDialogueModule = require(game.Workspace:WaitForChild("ZabanVendors").ZabanDialogueModule)
+local innkeeperModule = require(game.Workspace:WaitForChild("SpawnPointNPCS").InnkeeperModule)
+local starterCFrameModule = require(script.Parent.StarterCFrameModule)
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local hrp = character:WaitForChild("HumanoidRootPart")
+local main = player:WaitForChild("PlayerGui"):WaitForChild("Main")
+local questText = GameModules.QuestTextModule
+local islandNum = nil
+local batchNum = nil
+
+local dialogue = player.PlayerGui:WaitForChild("Dialogue")
+local canvasGroup = dialogue.CanvasGroup
+local titleLabel = dialogue.CanvasGroup.ImageLabel.Title
+local infoLabel = dialogue.CanvasGroup.ImageLabel.Info
+
+local typingSpeed = 0.01
+local continueTyping = true
+
+
+
+local cameraEffect = function(startCFrame, npc)
+	rs.RemoteEvents.UIEvents.LockMouseEvent:FireServer(true)
+	rs.RemoteEvents.UIEvents.CameraEffectEvent:FireServer(true)
+	npc.NameTag.Enabled = false
+	local prompt = npc.Head.ProximityPrompt
+	prompt.Enabled = false
+	npc.Head.ProximityPromptGui.CanvasGroup.Visible = false
+	task.wait(0.2)
+	hrp.CFrame = startCFrame
+	
+	camera.CameraType = Enum.CameraType.Scriptable
+
+	local cameraProgress = Instance.new("NumberValue")
+	cameraProgress.Value = 0
+	local connection
+	connection = RunService.RenderStepped:Connect(function()
+		local startPos = startCFrame.Position
+		local endPos = startCFrame.Position + startCFrame.LookVector * 2-- 20 studs forward from startCFrame
+		local cameraPos = startPos:Lerp(endPos, cameraProgress.Value)
+		local lookAt = npc.Torso.Position + Vector3.new(0, 4, 0)
+		camera.CFrame = CFrame.lookAt(cameraPos, cameraPos + startCFrame.LookVector)
+	end)
+
+	local tween = tweenService:Create(
+		cameraProgress,
+		TweenInfo.new(0.7, Enum.EasingStyle.Linear, Enum.EasingDirection.Out),
+		{Value = 1}
+	)
+
+
+	tween:Play()
+	tween.Completed:Connect(function()
+		connection:Disconnect()
+	end)
+end
+
+local defaultNPCCam = function(prompt)
+	local npc = prompt.Parent.Parent
+	local hrp = npc.HumanoidRootPart
+
+	local cframe = hrp.CFrame
+		* CFrame.new(0, 2.5, -6.5)
+		* CFrame.Angles(0, math.rad(180), 0)
+	cameraEffect(cframe, npc)
+	
+	return npc
+end
+
+ProximityPromptService.PromptTriggered:Connect(function(prompt, triggeredPlayer)
+	if triggeredPlayer ~= player then return end
+
+	--questNPCs prompts
+	if prompt:IsDescendantOf(workspace:WaitForChild("QuestNPCS")) then
+		local npc = prompt.Parent.Parent
+		cameraEffect(starterCFrameModule[npc.Name]["CFrame"], npc)
+		GameModules.NPCDialogueModule:UpdateDialogueGUI(player, npc, camera)
+		--questPrompt(prompt)
+	elseif prompt:IsDescendantOf(workspace:WaitForChild("ZabanVendors")) then
+		local npc = defaultNPCCam(prompt)
+		local stage = npc:FindFirstChild("Stage").Value
+		zabanDialogueModule:UpdateDialogueGUI(player, npc, camera, stage)
+	elseif prompt:IsDescendantOf(workspace:WaitForChild("SpawnPointNPCS")) then
+		local npc = defaultNPCCam(prompt)
+		innkeeperModule:UpdateDialogueGUI(player, npc, camera)
+	elseif prompt.Name == "FishingRodPrompt" then
+		rs.StatRemoteEvents.UpdateInventory:FireServer("Fishing Rod", 1)
+	elseif prompt.Name == "SkateboardPrompt" then
+		rs.StatRemoteEvents.UpdateInventory:FireServer("Skateboard", 1)
+	elseif prompt.Name == "NecklacePrompt" then
+		GameModules.GeneralModule.addNotification(player, "Found old man's necklace! Return to let him know.")
+		rs.RemoteEvents.NPCEvents.QuestNPCEvents.ChangeStageEvent:FireServer("Island1", "Batch3", 3)
+	end
+
+	
+end)
+
+for _, textButton in pairs(canvasGroup:GetChildren()) do
+	if textButton:IsA("TextButton") and textButton.Name ~= "SkipButton" then
+		textButton.MouseEnter:Connect(function()
+			for _, desc in pairs(textButton:GetDescendants()) do
+				if desc:IsA("UIGradient") then
+					desc.Enabled = true
+				end
+			end
+		end)
+
+		textButton.MouseLeave:Connect(function()
+			for _, desc in pairs(textButton:GetDescendants()) do
+				if desc:IsA("UIGradient") then
+					desc.Enabled = false
+				end
+			end
+		end)
+	end
+
+end
+
+
+canvasGroup.SkipButton.MouseButton1Click:Connect(function()
+	continueTyping = false
+end)
+
+
+
