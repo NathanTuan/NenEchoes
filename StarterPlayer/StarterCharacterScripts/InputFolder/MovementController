@@ -1,0 +1,281 @@
+local uis = game:GetService("UserInputService")
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local rs = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+
+local GameModules = require(rs.GameModules)
+local AnimationManager = require(rs:WaitForChild("MovementModule"))
+local AnimsModule = require(rs:WaitForChild("movementAnimsModule"))
+local AnimationSelector = AnimationManager.AnimationSelector
+local anims = AnimsModule:GetAnimations(character)
+
+
+player.CharacterAdded:Connect(function(newChar)
+	character = newChar
+	humanoid = character:WaitForChild("Humanoid")
+	anims = AnimationManager:GetAnimations(character)
+end)
+
+
+local sprintEvent = rs.RemoteEvents.MovementEvents.sprintEvent
+local moveEvent = rs.RemoteEvents.MovementEvents.MoveEndEvent
+local swimMoveEvent = rs.RemoteEvents.MovementEvents.SwimMoveEvent
+local rollEvent = rs.RemoteEvents.MovementEvents.RollEvent
+
+-- Input State Tracking
+local curW, curA, curS, curD = false, false, false, false
+local curSpace, curCtrl = false, false
+local holdingSpace = false
+local netD = ""
+local rollDB = false
+
+local lastSpacePress = 0
+local lastWPress = 0
+local doubleTapTime = 0.7
+
+--------------------------------------------------------------------------------
+-- Movement & Animation Direction Logic
+--------------------------------------------------------------------------------
+
+local function checkDirection()
+	if curW and not curA and not curD and not curS then
+		netD = "w"
+	elseif curA and not curD then
+		netD = "a"
+	elseif curD and not curA then
+		netD = "d"
+	elseif curS and not curW and not curA and not curD then
+		netD = "s"
+	elseif curW and curA and curD and not curS then
+		netD = "w"
+	else
+		netD = ""
+	end
+end
+
+local function swimCheck()
+	if curW and not curA and not curD and not curS then netD = "w"
+	elseif curA and not curD and not curW and not curS then netD = "a"
+	elseif curD and not curA and not curW and not curS then netD = "d"
+	elseif curS and not curW and not curA and not curD then netD = "s"
+	elseif curW and curA and curD and not curS then netD = "w"
+	elseif curA and curW and not curD and not curS then netD = "aw"
+	elseif curD and curW and not curA and not curS then netD = "dw"
+	elseif curA and curS and not curD and not curW then netD = "as"
+	elseif curD and curS and not curA and not curW then netD = "ds"
+	elseif not curW and not curA and not curD and not curS then netD = ""
+	end
+
+	if curSpace then netD ..= "up"
+	elseif curCtrl then netD ..= "down" end
+end
+
+
+local function updateDirection()
+	if character:GetAttribute("Swimming") == true then
+		swimCheck()
+		swimMoveEvent:FireServer(netD)
+	else
+		checkDirection()
+		if GameModules.GeneralModule.checkAll(player) == true then
+			moveEvent:FireServer(netD) 
+			
+			local isSprinting = character:GetAttribute("Sprinting") or false
+
+			if netD == "w" then
+				AnimationSelector.play(player, isSprinting and "sprint" or "walk", anims)
+			elseif netD == "a" then
+				AnimationSelector.play(player, isSprinting and "sprintLeft" or "leanLeft", anims)
+			elseif netD == "d" then
+				AnimationSelector.play(player, isSprinting and "sprintRight" or "leanRight", anims)
+			elseif netD == "s" then
+				AnimationSelector.play(player, "walk", anims)
+			else
+				AnimationSelector.play(player, "idle", anims)
+			end
+		end
+	end
+end
+
+
+--------------------------------------------------------------------------------
+-- Input Listeners
+--------------------------------------------------------------------------------
+
+uis.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+
+	if input.KeyCode == Enum.KeyCode.W then
+		curW = true
+		local currentTime = tick() 
+		if currentTime - lastWPress <= doubleTapTime and not character:GetAttribute("Swimming") then
+			sprintEvent:FireServer(true)
+		else
+			lastWPress = currentTime 
+		end
+		updateDirection()
+	end
+
+	if input.KeyCode == Enum.KeyCode.A then curA = true; updateDirection() end
+	if input.KeyCode == Enum.KeyCode.D then curD = true; updateDirection() end
+	if input.KeyCode == Enum.KeyCode.S then curS = true; updateDirection() end
+
+	if input.KeyCode == Enum.KeyCode.Q then
+		if character:GetAttribute("Driving") == true then
+			rs.RemoteEvents.MovementEvents.BoatFlyEvent:FireServer("Down")
+		else
+			local checks = GameModules.GeneralModule.checkAll(player)
+			if checks == true and rollDB == false then
+				rollDB = true
+				local dur = player.Character:GetAttribute("GodSpeed") and 1 or 2
+				task.delay(dur, function()
+					rollDB = false
+				end)
+				print("Should dash")
+				if character:GetAttribute("GodSpeed") == false then
+					if netD == "s" then
+						AnimationSelector.play(player, "rollBack", anims)
+					elseif netD == "a" then
+						AnimationSelector.play(player, "rollLeft", anims)
+					elseif netD == "d" then
+						AnimationSelector.play(player, "rollRight", anims)
+					else
+						AnimationSelector.play(player, "roll", anims)
+					end					
+				end
+
+				-- Notify server to perform physics/cooldown logic
+				rollEvent:FireServer()
+			end
+		end
+	end
+	
+	if input.KeyCode == Enum.KeyCode.Space then
+		if character:GetAttribute("Swimming") == true then
+			curSpace = true
+			swimCheck()
+			swimMoveEvent:FireServer(netD)
+		else
+			if GameModules.GeneralModule.checkAll(player) == true then
+				anims.startJump:Play()
+			end
+			
+		end
+
+		holdingSpace = true
+		task.spawn(function()
+			while holdingSpace do
+				if character:GetAttribute("Attacking") == true then
+					rs.RemoteEvents.CombatEvents.AirtiltEvent:FireServer()
+				end
+				task.wait(0.1)
+			end
+		end)
+
+		local currentTime = tick()
+		if currentTime - lastSpacePress <= doubleTapTime then
+			if character:GetAttribute("Attacking") == true and character:GetAttribute("Airtilting") == -1 then
+				rs.RemoteEvents.CombatEvents.AirtiltEvent:FireServer()
+			else
+				anims.startJump:Stop()
+				rs.RemoteEvents.MovementEvents.ClimbEvent:FireServer()
+			end
+		else
+			lastSpacePress = currentTime 
+		end
+	end
+
+	if input.KeyCode == Enum.KeyCode.LeftControl then
+		if character:GetAttribute("Swimming") == true then
+			curCtrl = true
+			swimCheck()
+			swimMoveEvent:FireServer(netD)
+		end
+	end
+
+	if input.KeyCode == Enum.KeyCode.E and character:GetAttribute("Driving") == true then
+		rs.RemoteEvents.MovementEvents.BoatFlyEvent:FireServer("Up")
+	end
+end)
+
+uis.InputEnded:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+
+	if input.KeyCode == Enum.KeyCode.W then
+		curW = false
+		if character:GetAttribute("Sprinting") == true then
+			sprintEvent:FireServer(false)
+		end
+		updateDirection()
+	end
+
+	if input.KeyCode == Enum.KeyCode.A then curA = false; updateDirection() end
+	if input.KeyCode == Enum.KeyCode.D then curD = false; updateDirection() end
+	if input.KeyCode == Enum.KeyCode.S then curS = false; updateDirection() end
+
+
+
+	
+	if input.KeyCode == Enum.KeyCode.Space then
+		holdingSpace = false
+		curSpace = false
+		if character:GetAttribute("Swimming") == true then
+			swimCheck()
+			swimMoveEvent:FireServer(netD)
+		end
+	end
+
+	if input.KeyCode == Enum.KeyCode.LeftControl then
+		curCtrl = false
+		if character:GetAttribute("Swimming") == true then
+			swimCheck()
+			swimMoveEvent:FireServer(netD)
+		end
+	end
+
+	if input.KeyCode == Enum.KeyCode.E or input.KeyCode == Enum.KeyCode.Q and character:GetAttribute("Driving") == true then
+		rs.RemoteEvents.MovementEvents.BoatFlyEvent:FireServer(player, "")
+	end
+end)
+
+-- Re-update client animation state if server attributes change (e.g., weapon equipped or sprint changed)
+character.AttributeChanged:Connect(function(attr)
+	if attr == "Sprinting" or attr == "Weapon" or attr == "Swimming" then
+		updateDirection()
+	end
+end)
+
+-- Heartbeat loop while swimming to keep direction updated smoothly
+local swimConnection
+character:GetAttributeChangedSignal("Swimming"):Connect(function()
+	if character:GetAttribute("Swimming") == true then
+		swimConnection = RunService.Heartbeat:Connect(function()
+			updateDirection()
+		end)
+		for i, v in pairs(humanoid.Animator:GetPlayingAnimationTracks()) do
+			print(v.Name)
+			v:Stop(0)
+		end
+	elseif swimConnection then
+		swimConnection:Disconnect()
+		swimConnection = nil
+	end
+end)
+
+rs.RemoteEvents.MovementEvents.MoveEndEvent.OnClientEvent:Connect(function()
+	updateDirection()
+end)
+
+rs.RemoteEvents.MovementEvents.SwimMoveEvent.OnClientEvent:Connect(function()
+	updateDirection()
+end)
+
+humanoid.StateChanged:Connect(function(oldState, newState)
+	if newState == Enum.HumanoidStateType.Landed then
+		anims.startJump:Stop()
+	end
+end)
