@@ -2,6 +2,7 @@ local players = game:GetService("Players")
 local rs = game:GetService("ReplicatedStorage")
 local GameModules = require(rs.GameModules)
 local GeneralModule = GameModules.GeneralModule
+local SFXModule = GameModules.SFXModule
 local cdManager = GameModules.CooldownManagerModule
 local tweenService = game:GetService("TweenService")
 local tweenInfo = TweenInfo.new(0.5, Enum.EasingStyle.Linear, Enum.EasingDirection.InOut)
@@ -12,11 +13,6 @@ local jumpEvent = rs.RemoteEvents.MovementEvents.JumpEvent
 local landEvent = rs.RemoteEvents.MovementEvents.LandEvent
 local rollEvent = rs.RemoteEvents.MovementEvents.RollEvent
 
-local movementManager = require(script.Parent.movementAnimsModule)
-
--- Import the modular animation system
-local AnimationSystem = require(script.Parent.MovementModule)
-local AnimationSelector = AnimationSystem.AnimationSelector
 
 -- Helper functions
 local function yieldAllBut(hum, anim)
@@ -30,132 +26,42 @@ end
 
 
 
--- ===== MOVEMENT ANIMATION SYSTEM =====
--- Now all animation selection is handled by AnimationSelector
--- Just call the appropriate function with the player and animations
+-- Movement Speed Configurations
+local WALK_SPEED = 16
+local SPRINT_SPEED = 28
+local SWIM_SPEED = 20
+local checkList = {"Stunned", "Ragdolled", "Driving", "MovementBlocked", "Blocking", "Parrying", "Busy", "Incapacitated"}
 
-sprintEvent.OnServerEvent:Connect(function(player, value)
+-- Handles Direction / Movement Updates
+moveEvent.OnServerEvent:Connect(function(player, netD)
 	local character = player.Character
-	character:SetAttribute("Sprinting", value)
+	if not character then return end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
+	if not GeneralModule.checkAll(player, checkList) then return end
+
+	-- Server tracks player's movement direction state if needed for mechanics
+	character:SetAttribute("CurrentDirection", netD)
 end)
 
-local checkList = {"Stunned", "Ragdolled", "Driving", "MovementBlocked", "Blocking", "Parrying", "Busy"}
-
-moveEvent.OnServerEvent:Connect(function(player, value)
+sprintEvent.OnServerEvent:Connect(function(player, isSprinting)
 	local character = player.Character
-	character:SetAttribute("NetDirection", value)
-	local hum = character:WaitForChild("Humanoid")
-	local dir = value
+	if not character then return end
+	local humanoid = character:FindFirstChildOfClass("Humanoid")
+	if not humanoid then return end
+	if not GeneralModule.checkAll(player, checkList) then return end
 
-	local anims = movementManager:GetAnimations(player.Character)
-	if not anims then return end
-
-	if not character:GetAttribute("Sprinting") then
-		local checks = GeneralModule.checkAll(player, checkList) 
-		if checks == false then 
-			--AnimationSelector.play(player, "idle", anims)
-			return 
-		end 
-		character:SetAttribute("Speed", 16) 
-		local speedBuff = 0
-		for _, v in pairs(character:GetChildren()) do
-			if v:IsA("IntValue") and string.find(v.Name, "SpeedBuff") then
-				speedBuff = speedBuff + v.Value
-			end
-		end
-		character.Humanoid.WalkSpeed = character:GetAttribute("Speed") + speedBuff
-
-		-- Use modular animation selector
-		if dir == "w" then
-			AnimationSelector.play(player, "walk", anims)
-		elseif dir == "a" then
-			AnimationSelector.play(player, "leanLeft", anims)
-		elseif dir == "d" then
-			AnimationSelector.play(player, "leanRight", anims)
-		elseif dir == "s" then
-			AnimationSelector.play(player, "walk", anims)
-		else
-			AnimationSelector.play(player, "idle", anims)
-		end
+	if isSprinting and not character:GetAttribute("Swimming") and not character:GetAttribute("Attacking") then
+		character:SetAttribute("Sprinting", true)
+		character:SetAttribute("Speed", SPRINT_SPEED)
+		humanoid.WalkSpeed = SPRINT_SPEED + GeneralModule.getSpeedBuffs(player.Character)
 	else
-		local checks = GeneralModule.checkAll(player, checkList) 
-		if checks == false then 
-			AnimationSelector.play(player, "idle", anims)
-			return 
-		end 
-		character:SetAttribute("Speed", 24) 
-		local speedBuff = 0
-		for _, v in pairs(character:GetChildren()) do
-			if v:IsA("IntValue") and string.find(v.Name, "SpeedBuff") then
-				speedBuff = speedBuff + v.Value
-			end
-		end
-		character.Humanoid.WalkSpeed = character:GetAttribute("Speed") + speedBuff
-
-		-- Use modular animation selector for sprinting
-		if dir == "w" then
-			AnimationSelector.play(player, "sprint", anims)
-		elseif dir == "a" then
-			AnimationSelector.play(player, "sprintLeft", anims)
-		elseif dir == "d" then
-			AnimationSelector.play(player, "sprintRight", anims)
-		else
-			AnimationSelector.play(player, "idle", anims)
-		end
+		character:SetAttribute("Sprinting", false)
+		character:SetAttribute("Speed", WALK_SPEED)
+		humanoid.WalkSpeed = WALK_SPEED + GeneralModule.getSpeedBuffs(player.Character)
 	end
 end)
 
-jumpEvent.OnServerEvent:Connect(function(player)
-	if player.Character:GetAttribute("Driving") == true then
-		local skateboard = player.Character:FindFirstChild("Skateboard")
-		local m6D = skateboard.Handles.SkateboardWeld
-		if skateboard then
-			for _, part in pairs(skateboard.SkateboardModel:GetChildren()) do
-			end
-
-
-			local originalC0 = m6D.C0
-			local spinDegrees = 360
-			local spinTime = 0.375
-			local elapsed = 0
-
-			local connection
-			connection = game:GetService("RunService").Heartbeat:Connect(function(dt)
-				elapsed += dt
-				local alpha = math.clamp(elapsed / spinTime, 0, 1)
-				local rotation = math.rad(spinDegrees) * alpha
-				m6D.C0 = originalC0 * CFrame.Angles(0, 0, rotation)
-
-				if alpha >= 1 then
-					connection:Disconnect()
-					m6D.C0 = originalC0 * CFrame.Angles(0, 0, math.rad(spinDegrees))
-					for _, part in pairs(skateboard.SkateboardModel:GetChildren()) do
-						part.CanCollide = true
-						part.CanTouch = true
-					end
-				end
-			end)
-		end
-	end
-
-	local checks = GeneralModule.checkAll(player)
-	if checks == false or player.Character:GetAttribute("Busy") == true then return end
-	GeneralModule.yieldAllBut(player.Character, "")
-	local anims = movementManager:GetAnimations(player.Character)
-	AnimationSelector.play(player, "jump", anims)
-end)
-
-landEvent.OnServerEvent:Connect(function(player)
-	yieldAllBut(player.Character.Humanoid, "")
-	local anims = movementManager:GetAnimations(player.Character)
-	AnimationSelector.play(player, "endJump", anims)
-
-	GeneralModule.stun(player.Character, 1)
-	task.wait()
-	anims.endJump.Stopped:Connect(function()
-		moveEvent:FireClient(player)
-	end)
-end)
 
 -- ===== VFX HELPERS (unchanged) =====
 local draw = function(p1, p2, x, y)
@@ -234,37 +140,24 @@ rollEvent.OnServerEvent:Connect(function(player)
 
 	player.Character:SetAttribute("Dashing", true)
 	--player.Character:SetAttribute("Busy", true)
-	local anims = movementManager:GetAnimations(player.Character)
 	GeneralModule.setCollisionGroup(player.Character, 1.3)
 
 	local hrp = player.Character.PrimaryPart
 	local moveDir = player.Character.Humanoid.MoveDirection
 	moveDir = Vector3.new(moveDir.X, 0, moveDir.Z).Unit
 
-	-- Play directional roll animation based on NetDirection
-	if player.Character:GetAttribute("GodSpeed") == false then
-		local dir = player.Character:GetAttribute("NetDirection")
-		if dir == "w" then
-			AnimationSelector.play(player, "roll", anims)
-		elseif dir == "s" then
-			AnimationSelector.play(player, "rollBack", anims)
-		elseif dir == "a" then
-			AnimationSelector.play(player, "rollLeft", anims)
-		elseif dir == "d" then
-			AnimationSelector.play(player, "rollRight", anims)
-		else
-			AnimationSelector.play(player, "roll", anims)
-		end
-	end
+	task.spawn(function()
+		local dustVFX = rs.VFX.CombatVFX.DustVFX
+		local goalCFrame = hrp.CFrame * CFrame.new(moveDir*2) * CFrame.new(0, -2, 0)
+		rs.RemoteEvents.UIEvents.CreateVFXEvent:FireClient(player, dustVFX, goalCFrame, 0.3, "Enable")
+	end)
+
 
 	if player.Character:GetAttribute("NetDirection") == "" then
 		moveDir = hrp.CFrame.LookVector
 	end	
 
-	local sfx = rs.SFX.Movement.DashSFX:Clone()
-	sfx.Parent = player.Character.PrimaryPart
-	sfx:Play()
-	game:GetService("Debris"):AddItem(sfx, sfx.TimeLength)
+	SFXModule:PlaySFX("DashSFX", player.Character.SFX.ActionSFX)
 
 	if player.Character:GetAttribute("GodSpeed") == true then
 		task.wait(0.1)
@@ -300,21 +193,12 @@ rollEvent.OnServerEvent:Connect(function(player)
 	else 
 		local hum = player.Character.Humanoid
 		local originalHipHeight = hum.HipHeight
-		hum.HipHeight = originalHipHeight + 1.5
-		
+		--hum.HipHeight = originalHipHeight + 1.5
+
 		GeneralModule.addSpeedBuff(player, "dashSpeedBuff", 60)
 		task.wait(0.25)
 		GeneralModule.removeSpeedBuff(player.Character, "dashSpeedBuff")
-		--[[
-		local bv = Instance.new("BodyVelocity")
-		bv.MaxForce = Vector3.new(1e8, 0, 1e8)  
-		bv.Parent = hrp
-		bv.Velocity = moveDir * (70)
-		task.wait(0.2)
-		bv:Destroy()
-		]]
-		
-		hum.HipHeight = originalHipHeight
+		--hum.HipHeight = originalHipHeight
 	end	
 
 	task.wait(0.1)
@@ -323,13 +207,13 @@ rollEvent.OnServerEvent:Connect(function(player)
 	moveEvent:FireClient(player)
 end)
 
-
-local climbRange = 4     -- how far to check in front
-local climbHeight = 6    -- max ledge height
-local climbUp = 5        -- how much to move up
+local climbRange = 4     -- Distance in front to check
+local climbHeight = 6    -- Maximum height diff allowed
 
 local function getLedge(player)
-	local hrp = player.Character.PrimaryPart
+	local hrp = player.Character and player.Character.PrimaryPart
+	if not hrp then return nil end
+
 	local rayOrigin = hrp.Position
 	local rayDirection = hrp.CFrame.LookVector * climbRange
 	local raycastParams = RaycastParams.new()
@@ -337,32 +221,75 @@ local function getLedge(player)
 	raycastParams.FilterType = Enum.RaycastFilterType.Exclude
 
 	local result = workspace:Raycast(rayOrigin, rayDirection, raycastParams)
-	if result then
-		print(result.Instance.Name)
-		local ledgePos = result.Instance.Position
-		local topY = ledgePos.Y + (result.Instance.Size.Y / 2)
-		local heightDiff = topY-(hrp.Position.Y)
-		if heightDiff < climbHeight then
-			return topY
+	if result and result.Instance.CollisionGroup ~= "NormalPlayerCollide" and result.Instance.CollisionGroup ~= "TempNoCollide" then
+		local topY = result.Position.Y + 0.5 -- Hits top edge of hit surface or part top
+		-- Calculate top Y based on hit object bounds if fully wall-facing
+		topY = math.max(topY, result.Instance.Position.Y + (result.Instance.Size.Y / 2))
+
+		local heightDiff = topY - hrp.Position.Y
+		if heightDiff > 0 and heightDiff <= climbHeight then
+			return topY, heightDiff
 		end
 	end
-	return nil
+	return nil, 0
 end
 
 rs.RemoteEvents.MovementEvents.ClimbEvent.OnServerEvent:Connect(function(player)
-	local anims = movementManager:GetAnimations(player.Character)
-	if not anims then return end
-	
-	local ledgeGoalPos = getLedge(player)
-	local hrp = player.Character.PrimaryPart
-	if ledgeGoalPos then
-		anims.climb:Play()
-		
-		local bodyVelocity = Instance.new("BodyVelocity")
-		bodyVelocity.Velocity = Vector3.new(0, 25, 0)  
-		bodyVelocity.MaxForce = Vector3.new(0, math.huge, 0)
-		bodyVelocity.P = 1000
-		bodyVelocity.Parent = hrp
-		game:GetService("Debris"):AddItem(bodyVelocity, 0.4)
+	local char = player.Character
+	if not char then return end
+
+	local hrp = char:FindFirstChild("HumanoidRootPart")
+	local humanoid = char:FindFirstChildOfClass("Humanoid")
+	if not hrp or not humanoid or char:GetAttribute("Stunned") then return end
+
+
+	local ledgeGoalY, heightNeeded = getLedge(player)
+
+	if ledgeGoalY then
+		player.Character:SetAttribute("Climbing", true)
+		GeneralModule.stun(player.Character, 0.75, true)
+		humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+		humanoid.AutoRotate = false
+
+		local climb = humanoid.Animator:LoadAnimation(rs.Animations.MovementAnims.GeneralMovementAnims.ClimbingAnim)
+		climb:Play()
+
+
+		local attachment = Instance.new("Attachment")
+		attachment.Parent = hrp
+
+		local linearVelocity = Instance.new("LinearVelocity")
+		linearVelocity.Attachment0 = attachment
+		linearVelocity.MaxForce = math.huge
+		linearVelocity.VectorVelocity = Vector3.new(0, 0, 0) 
+		linearVelocity.RelativeTo = Enum.ActuatorRelativeTo.World
+		linearVelocity.Parent = hrp
+
+		hrp.CFrame = CFrame.new(Vector3.new(hrp.Position.X, ledgeGoalY - heightNeeded, hrp.Position.Z))
+		local dustVFX = rs.VFX.CombatVFX.DustVFX
+		local goalCFrame = hrp.CFrame * CFrame.new(0, -2, 0)
+		rs.RemoteEvents.UIEvents.CreateVFXEvent:FireClient(player, dustVFX, goalCFrame, 1, "Emit")
+
+		linearVelocity.VectorVelocity = Vector3.new(0, 12, 0) 
+		-- 4. Calculate exact duration based on speed and height needed
+		local speed = linearVelocity.VectorVelocity.Y
+		local climbDuration = (heightNeeded + 2.5) / speed
+
+		task.wait(climbDuration)
+
+		local forwardSpeed = 10
+		local forwardDuration = 0.25
+		linearVelocity.VectorVelocity = hrp.CFrame.LookVector * forwardSpeed
+		task.wait(forwardDuration)
+
+		linearVelocity:Destroy()
+		attachment:Destroy()
+
+
+		--hrp.CFrame = CFrame.new(Vector3.new(hrp.Position.X, ledgeGoalY + 1.5, hrp.Position.Z)) + (hrp.CFrame.LookVector * 1.5)
+		humanoid.AutoRotate = true
+		humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+		player.Character:SetAttribute("Climbing", false)
 	end
 end)
+
