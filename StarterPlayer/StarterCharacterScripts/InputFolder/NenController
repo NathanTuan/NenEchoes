@@ -1,0 +1,119 @@
+local rs = game:GetService("ReplicatedStorage")
+local uis = game:GetService("UserInputService")
+local player = game:GetService("Players").LocalPlayer
+local character = player.Character or player.CharacterAdded:Wait()
+local humanoid = character:WaitForChild("Humanoid")
+local hrp = character:WaitForChild("HumanoidRootPart")
+local mouse = player:GetMouse()
+
+--State Variables
+local chargedb = false
+local charging = false
+
+
+
+uis.InputBegan:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	
+	--Nen Charging
+	if input.KeyCode == Enum.KeyCode.R then
+		if charging == -1 and chargedb == false then
+			rs.RemoteEvents.NenAbilities.StartChargeNenEvent:FireServer(true)
+			chargedb = true
+			charging = 0
+			task.spawn(function()
+				task.wait(0.5)
+				chargedb = false
+				task.wait(0.3)
+				if charging == 0 then charging = 1 end
+			end)
+		end
+		while charging ~= -1 do
+			if charging == 0 then
+				rs.RemoteEvents.NenAbilities.ChargeNenEvent:FireServer(true, 0)
+			elseif charging == 1 then
+				rs.RemoteEvents.NenAbilities.ChargeNenEvent:FireServer(true, 1)
+			end
+			task.wait(0.1)
+		end
+	end
+	
+	if input.KeyCode == Enum.KeyCode.Z then
+		local target = mouse.Hit.Position
+		target = Vector3.new(target.X, player.Character.HumanoidRootPart.Position.Y, target.Z)
+		if player.Character:GetAttribute("AbilityEnabled") == true then
+			if player.Character:GetAttribute("NenAbility") == "Kite" then
+				if player.Character:GetAttribute("HeadOut") == true then
+					rs.RemoteEvents.NenAbilities.KiteMoves.SpinEvent:FireServer()
+				end
+			else 
+				if player.Character:GetAttribute("NenAbility") == "Gon" then
+					rs.RemoteEvents.NenAbilities[player.Character:GetAttribute("NenAbility").."Moves"].Z:FireServer(target, false)
+
+				else
+					rs.RemoteEvents.NenAbilities[player.Character:GetAttribute("NenAbility").."Moves"].Z:FireServer(target)	
+				end
+			end
+		end
+	end
+
+	if input.KeyCode == Enum.KeyCode.X then
+		local target = mouse.Hit.Position
+		target = Vector3.new(target.X, player.Character.HumanoidRootPart.Position.Y, target.Z)
+		if player.Character:GetAttribute("AbilityEnabled") == true then
+
+			if player.Character:GetAttribute("NenAbility") == "Kite" then
+				if player.Character:GetAttribute("Weapon") == "SpawnedGun" then
+					rs.RemoteEvents.NenAbilities.KiteMoves.SpawnedGun.X:FireServer(target)
+				elseif player.Character:GetAttribute("Weapon") == "SpawnedScythe" then
+					rs.RemoteEvents.NenAbilities.KiteMoves.SpawnedScythe.X:FireServer()
+				end
+			else
+				if player.Character:GetAttribute("NenAbility") == "Gon" then
+					rs.RemoteEvents.NenAbilities[player.Character:GetAttribute("NenAbility").."Moves"].X:FireServer(target, false)
+
+				else
+					rs.RemoteEvents.NenAbilities[player.Character:GetAttribute("NenAbility").."Moves"].X:FireServer(target)
+				end
+			end
+
+
+		end
+	end
+
+	if input.KeyCode == Enum.KeyCode.C then
+		local target = mouse.Hit.Position
+		target = Vector3.new(target.X, player.Character.HumanoidRootPart.Position.Y, target.Z)
+		if player.Character:GetAttribute("AbilityEnabled") == true then
+			if player.Character:GetAttribute("NenAbility") == "Kite" then
+				if player.Character:GetAttribute("Weapon") == "SpawnedGun" then
+					rs.RemoteEvents.NenAbilities.KiteMoves.SpawnedGun.C:FireServer(target)
+				elseif player.Character:GetAttribute("Weapon") == "SpawnedScythe" then
+					rs.RemoteEvents.NenAbilities.KiteMoves.SpawnedScythe.C:FireServer()
+				end
+			else
+				rs.RemoteEvents.NenAbilities[player.Character:GetAttribute("NenAbility").."Moves"].C:FireServer(target)
+			end
+		end
+
+	end
+
+	if input.KeyCode == Enum.KeyCode.V then
+		local target = mouse.Hit.Position
+		if player.Character:GetAttribute("AbilityEnabled") == true then
+			rs.RemoteEvents.NenAbilities[player.Character:GetAttribute("NenAbility").."Moves"].V:FireServer(target)
+		end
+	end
+	
+end)
+
+
+uis.InputEnded:Connect(function(input, gameProcessed)
+	if gameProcessed then return end
+	
+	--Nen Charging
+	if input.KeyCode == Enum.KeyCode.R then
+		charging = -1
+		rs.RemoteEvents.NenAbilities.ChargeNenEvent:FireServer(false)
+	end
+end)
