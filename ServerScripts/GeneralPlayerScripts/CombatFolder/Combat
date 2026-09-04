@@ -1,562 +1,356 @@
 local players = game:GetService("Players")
-local redOutline = game:GetService("ReplicatedStorage").redOutline
-local m1Event = game:GetService("ReplicatedStorage").RemoteEvents.CombatEvents.M1
-local tweenService = game:GetService("TweenService")
-
-local tweenInfo = TweenInfo.new(0.3, Enum.EasingStyle.Quint, Enum.EasingDirection.InOut)
-local tweenInfo2 = TweenInfo.new(0.15, Enum.EasingStyle.Quint, Enum.EasingDirection.InOut)
-local tweenInfo3 = TweenInfo.new(0.6, Enum.EasingStyle.Quint, Enum.EasingDirection.InOut)
-local meterEvent = game:GetService("ReplicatedStorage").RemoteEvents.UIEvents.MeterEvent
-local blockEvent = game:GetService("ReplicatedStorage").RemoteEvents.CombatEvents.BlockEvent
-
---m1Functions
 local rs = game:GetService("ReplicatedStorage")
-local m1IdleFunction = rs.BindableFunctions.M1Function
-local hitEffectTemplate = rs.VFX.CombatVFX.WindImpactVFX--rs.VFX.CombatVFX.BoostVFXWhite--rs:WaitForChild("VFX").CombatVFX:WaitForChild("RedFX")
+local debris = game:GetService("Debris")
 
-local possibleParts = {"Torso", "Head", "Left Arm", "Right Arm", "Left Leg", "Right Leg"}
+local m1Event = rs.RemoteEvents.CombatEvents.M1
+local blockEvent = rs.RemoteEvents.CombatEvents.BlockEvent
+local unblockEvent = rs.RemoteEvents.CombatEvents.UnblockEvent
+local airtiltEvent = rs.RemoteEvents.CombatEvents.AirtiltEvent
 local activateM1Event = rs.RemoteEvents.CombatEvents.ActivateM1Event
+
+local hitEffectTemplate = rs.VFX.CombatVFX.WindImpactVFX
 local GameModules = require(rs.GameModules)
 local GeneralModule = GameModules.GeneralModule
 local ragdollModule = GameModules.RagdollModule
-local combatAnimModule = require(script.Parent.combatAnimsModule)
+local SFXModule = GameModules.SFXModule
 
+local m1CheckList = {"Stunned", "Cooldown", "Blocking", "Charging", "Busy", "Swimming", "Incapacitated"}
+local wantToBlock = {}
 
-local function yieldAllBut(hum, anim)
-	for i, v in pairs(hum:GetPlayingAnimationTracks()) do
-
-		if v.Name ~= anim and v.Name ~= "idleAnim" then
-			v:Stop()
-			v:Destroy()
-		end
-	end
-end
-local segments = 10
-local radius = 10
-local yOffset = 0.1
-
---[[
-
-
-Old M1s:
-
-m1 1 - 105628309108283
-m1 2 - 80021067067640
-m1 3 - 86468777393553
-m1 4 - 115219024207914
-m1 5 - 117641765164479
-
-New M1s:
-
-m1 1 - 105628309108283
-m1 2 - 80021067067640
-m1 3 - 86468777393553
-m1 4 - 115219024207914
-m1 5 - 117641765164479
-
-]]
-
-
-local function hitbox(rootPart)
-
+local function createHitbox(rootPart)
 	local hitbox = Instance.new("Part")
 	hitbox.Size = Vector3.new(5, 6, 5)
 	hitbox.Transparency = 1
 	hitbox.CanCollide = false
 	hitbox.CanQuery = false
 	hitbox.Anchored = true
-	hitbox.BrickColor = BrickColor.new("Bright red")
-	hitbox.Parent = workspace
-	hitbox.CFrame = CFrame.lookAt(rootPart.Position + rootPart.CFrame.LookVector*4, rootPart.Position + rootPart.CFrame.LookVector * 6)
+	hitbox.CFrame = rootPart.CFrame * CFrame.new(0, 0, -3)
 	hitbox.Name = "Hitbox"
+	hitbox.Parent = workspace
 
-	game:GetService("Debris"):AddItem(hitbox, 0.3)
+	debris:AddItem(hitbox, 0.2)
 	return hitbox
-
 end
 
-local function castHitbox(player)
-	
-	
-	
+local function castHitbox(player, combo)
 	local character = player.Character
-	local canDo = false
+	if not character or not character.PrimaryPart then return end
 
 	local rootPart = character.PrimaryPart
-	if rootPart then
-		
-		local hitbox = hitbox(rootPart)
+	local hitbox = createHitbox(rootPart)
 
-		local hitboxParams = OverlapParams.new()
-		hitboxParams.FilterDescendantsInstances = {character, hitbox}
-		hitboxParams.FilterType = Enum.RaycastFilterType.Exclude
-		hitboxParams.MaxParts = 50
+	local hitboxParams = OverlapParams.new()
+	hitboxParams.FilterDescendantsInstances = {character, hitbox}
+	hitboxParams.FilterType = Enum.RaycastFilterType.Exclude
+	hitboxParams.MaxParts = 50
 
-		local partsInBox = workspace:GetPartBoundsInBox(hitbox.CFrame, hitbox.Size, hitboxParams)
+	local partsInBox = workspace:GetPartBoundsInBox(hitbox.CFrame, hitbox.Size, hitboxParams)
+	local hitPlayers = {}
 
-		local hitPlayers= {}
-		for _, v in partsInBox do
-			local hum = v.Parent:FindFirstChild("Humanoid")
+	for _, v in ipairs(partsInBox) do
+		local targetChar = v.Parent
+		local hum = targetChar:FindFirstChild("Humanoid")
 
-			if hum and not hitPlayers[v.Parent] then	
+		if hum and not hitPlayers[targetChar] then	
+			hitPlayers[targetChar] = true
+			if targetChar:GetAttribute("Invincible") then continue end
 
-				hitPlayers[v.Parent] = true
-				local damage = 0
+			local damage = 0
 
-				if v.Parent:GetAttribute("Parrying") == true then
-					if v.Parent:GetAttribute("Invincible") == true then return end
-					local parryFX = rs.VFX.CombatVFX.parryFX:Clone()
-
-
-					local arm = v.Parent:FindFirstChild("Left Arm")
-					if arm then
-						local armForward = arm.CFrame.RightVector
-						parryFX.Position = arm.Position + armForward *1
-						local m6D = Instance.new("Motor6D")
-						m6D.Parent = arm
-						m6D.Part0 = arm
-						m6D.Part1 = parryFX
-						m6D.C1 = CFrame.new(0, 0, 1)
-						game:GetService("Debris"):AddItem(m6D, 3)
-					end
-
-					parryFX.Parent = game.Workspace
-					task.wait(0.1)
-					for _, att in pairs(parryFX:GetChildren()) do
-						for _, emitter in pairs(att:GetChildren()) do
-							emitter:Emit(emitter:GetAttribute("EmitCount"))
-						end
-					end
-					game:GetService("Debris"):AddItem(parryFX, 3)
-					
-					local sfx = rs.SFX.Combat.ParrySFX:Clone()
-					sfx.Parent = v.Parent.PrimaryPart
-					sfx:Play()
-					game:GetService("Debris"):AddItem(sfx, sfx.TimeLength)
-
-					GeneralModule.stun(player.Character, 1.2, false)
-					GeneralModule.stun(v.Parent, 0.8, false)
-					
-					local clip = hum.Animator:LoadAnimation(rs.Animations.M1Anims.BlockParry):Play()
-
-				elseif v.Parent:GetAttribute("Blocking") == true then
-					if v.Parent:GetAttribute("Invincible") == true then return end
-					
-					local sfx = rs.SFX.Combat.M1BlockedSFX:Clone()
-					sfx.Parent = v.Parent.PrimaryPart
-					sfx:Play()
-					game:GetService("Debris"):AddItem(sfx, sfx.TimeLength)
-					
-					if player.Character:GetAttribute("Combo") == 5 then
-						damage = 8
-						GeneralModule.blockbreak(v.Parent)
-						--GeneralModule.yieldAllBut(v.Parent, "f")
-						GeneralModule.createHitEffect(v.Parent.PrimaryPart.Position + Vector3.new(0, 0.9, -1.5), hitEffectTemplate)
-						GeneralModule.stun(v.Parent, 2)
-					else
-						damage = 2
-						task.delay(0.1, function()
-							local vfx = rs.VFX.CombatVFX.BlockHitVFX:Clone()
-							vfx.Parent = game.Workspace
-							vfx.Position = v.Parent.PrimaryPart.Position + Vector3.new(0, 0.9, -1.5)
-							game:GetService("Debris"):AddItem(vfx, 1)
-							for _, emitter in pairs(vfx:GetDescendants()) do
-								if emitter:IsA("ParticleEmitter") then
-									emitter:Emit(emitter:GetAttribute("EmitCount"))
-								end
-
-							end
-						end)
-					end
-
-
-				else
-					if v.Parent:GetAttribute("Invincible") == true then return end
-					local sfx = rs.SFX.Combat.M1HitSFX:Clone()
-					sfx.Parent = v.Parent.PrimaryPart
-					sfx:Play()
-					game:GetService("Debris"):AddItem(sfx, sfx.TimeLength)
-					
-					damage  = 5 * (1+(player.Stats.Strength.Value*0.05))
-					if player.Character:GetAttribute("Combo") == 5 then
-						if player.Character:GetAttribute("Airtilting") == 1 then
-							GeneralModule.stun(v.Parent, 1.5)
-							local lv = v.Parent.PrimaryPart:FindFirstChild("UptiltLv")
-							if lv then
-								
-								local origin = rootPart.Position
-								local direction = Vector3.new(rootPart.CFrame.LookVector.X, -0.65, rootPart.CFrame.LookVector.Z).Unit * 100
-								
-								local downslamVFX = rs.VFX.CombatVFX.DownslamVFX:Clone()
-								downslamVFX.Position = origin
-								downslamVFX.CFrame = CFrame.lookAt(origin, origin + direction)
-								downslamVFX.Parent = game.Workspace
-								game:GetService("Debris"):AddItem(downslamVFX, 3)
-								task.wait(0.05)
-								for _, v in pairs(downslamVFX:GetDescendants()) do
-									if v:IsA("ParticleEmitter") then
-										v:Emit(v:GetAttribute("EmitCount"))
-									end
-								end
-								
-								local raycastParams = RaycastParams.new()
-								raycastParams.FilterType = Enum.RaycastFilterType.Exclude
-								raycastParams.FilterDescendantsInstances = {player.Character, v.Parent} 
-
-								local result = workspace:Raycast(origin, direction, raycastParams)
-
-								if result and result.Instance then
-									--[[
-									local hurtAnim = rs.HurtAnims.groundSlamHurtAnim
-									local clip = v.Parent.Humanoid.Animator:LoadAnimation(hurtAnim)
-									clip:Play()
-									task.delay(1.2, function()
-										clip:Stop()
-									end)
-									]]
-									
-									local distance = (result.Position-v.Parent.PrimaryPart.Position).Magnitude
-									local speed = 90
-									local timeDelay = distance/speed
-									lv.VectorVelocity = (result.Position - v.Parent.PrimaryPart.Position).Unit * speed
-									task.delay(timeDelay, function()
-										task.spawn(function()
-											lv.VectorVelocity = Vector3.new(0, 0, 0)
-											task.wait(0.1)
-											lv:Destroy()
-											ragdollModule:Ragdoll(v.Parent, 1)
-											
-											local num = math.random(1, 2)
-											local sfx = rs.SFX.Combat["GroundSlamSFX ("..tostring(num)..")"]:Clone()
-											sfx.Parent = v.Parent.PrimaryPart
-											sfx:Play()
-											game:GetService("Debris"):AddItem(sfx, sfx.TimeLength)
-										end)
-										
-										
-										GeneralModule.stun(v.Parent, 1.2)
-										GeneralModule.removeAttackingState(character)
-										
-			
-
-										GeneralModule.spawnCrater(v.Parent.PrimaryPart, 2)
-										
-										local explosionVFX = rs.VFX.CombatVFX.ExplosionVFX:Clone()
-										explosionVFX.Position = v.Parent.PrimaryPart.Position + Vector3.new(0, -1.2, 0)
-										explosionVFX.Parent = game.Workspace
-										task.spawn(function()
-											game.Debris:AddItem(explosionVFX, 2)
-											task.wait(0.1)
-											for _, emitter in pairs(explosionVFX.Attachment:GetChildren()) do
-												emitter:Emit(25)
-											end
-										end)
-										
-										
-									end)
-									local myLv = rootPart:FindFirstChild("UptiltLv")
-									if myLv then
-										myLv:Destroy()
-									end
-								end
-							end
-							
-						else
-							GeneralModule.knockback(character, v.Parent, 30)
-							ragdollModule:Ragdoll(v.Parent, 1)
-							GeneralModule.stun(v.Parent, 1.5)
-						end
-						
-						damage = 8+ (1*(player.Stats.Strength.Value*0.3))
-							
-						GeneralModule.createHitEffect(hum.Parent.PrimaryPart.Position + Vector3.new(0, 0.7, 0), hitEffectTemplate)
-						
-						
-					else
-						if player.Character:GetAttribute("Combo") > 3 then
-							if player.Character:GetAttribute("Airtilting") == 0 then
-								player.Character:SetAttribute("Airtilting", 1)
-								local lv = Instance.new("LinearVelocity")
-								lv.Name = "UptiltLv"
-								lv.Attachment0 = rootPart:FindFirstChild("RootAttachment") or Instance.new("Attachment", rootPart)
-								lv.MaxForce = 1e10
-								lv.VectorVelocity = Vector3.new(0, 70, 0)
-								lv.Parent = rootPart
-								
-								GeneralModule.setCollisionGroup(v.Parent,0.15)
-								GeneralModule.setCollisionGroup(player.Character, 0.15)
-								task.delay(0.15, function()
-									lv.VectorVelocity = Vector3.new(0, 0, 0)
-									local humanoid = player.Character.Humanoid
-									local connection
-									connection = game:GetService("RunService").Stepped:Connect(function()
-										if lv then
-											local horizontal = Vector3.new(
-												humanoid.MoveDirection.X,
-												0,
-												humanoid.MoveDirection.Z
-											) * humanoid.WalkSpeed
-
-											
-											lv.VectorVelocity = horizontal
-										else
-											connection:Disconnect()
-											connection = nil
-										end
-									end)
-								end)
-								
-								
-								local lv2 = Instance.new("LinearVelocity")
-								lv2.Name = "UptiltLv"
-								game.Debris:AddItem(lv2, 3)
-								lv2.Attachment0 = v.Parent.PrimaryPart:FindFirstChild("RootAttachment") or Instance.new("Attachment", v.Parent.PrimaryPart)
-								lv2.MaxForce = 1e10
-								lv2.VectorVelocity = Vector3.new(0, 70, 0)
-								lv2.Parent = v.Parent.PrimaryPart
-								--game.Debris:AddItem(lv, 0.07)
-								task.delay(0.15, function()
-									lv2.VectorVelocity = Vector3.new(0, 0, 0)
-								end)
-								
-							end
-						end
-						GeneralModule.stun(v.Parent, 0.8)
-						GeneralModule.knockback(character, v.Parent, 10)
-						GeneralModule.createHitEffect(hum.Parent.PrimaryPart.Position + Vector3.new(0, 0.7, 0), hitEffectTemplate)
-					
-					end
-
-					--yieldAllBut(v.Parent:FindFirstChild("Humanoid"), " ")
-					local health = v.Parent:FindFirstChild("Humanoid").Health
+			-- PARRY LOGIC
+			if targetChar:GetAttribute("Parrying") then
+				local parryFX = rs.VFX.CombatVFX.parryFX:Clone()
+				local arm = targetChar:FindFirstChild("Left Arm")
+				if arm then
+					parryFX.Position = arm.Position + (arm.CFrame.RightVector * 1)
+					local m6D = Instance.new("Motor6D")
+					m6D.Part0 = arm
+					m6D.Part1 = parryFX
+					m6D.C1 = CFrame.new(0, 0, 1)
+					m6D.Parent = arm
+					debris:AddItem(m6D, 3)
 				end
-				if v.Parent:GetAttribute("Invincible") == true then return end
-				GeneralModule.damageLooks(player, v, damage)
-				hum:TakeDamage(damage)
-				rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, damage)
+
+				parryFX.Parent = workspace
+				debris:AddItem(parryFX, 3)
+
+				task.defer(function()
+					for _, att in ipairs(parryFX:GetChildren()) do
+						for _, emitter in ipairs(att:GetChildren()) do
+							emitter:Emit(emitter:GetAttribute("EmitCount") or 1)
+						end
+					end
+				end)
+
+				SFXModule:PlaySFX("ParrySFX", character.SFX.ActionSFX)
+				GeneralModule.stun(character, 1.2, false)
+				GeneralModule.stun(targetChar, 0.8, false)
+				hum.Animator:LoadAnimation(rs.Animations.M1Anims.BlockParry):Play()
+				return
+
+					-- BLOCK LOGIC
+			elseif targetChar:GetAttribute("Blocking") then
+				SFXModule:PlaySFX("M1BlockedSFX", character.SFX.ActionSFX)
+				if combo == 5 then
+					damage = 8
+					GeneralModule.blockbreak(targetChar)
+					GeneralModule.createHitEffect(targetChar.PrimaryPart.Position + Vector3.new(0, 0.9, -1.5), hitEffectTemplate)
+					GeneralModule.stun(targetChar, 2, false)
+				else
+					damage = 2
+					task.delay(0.05, function()
+						local vfx = rs.VFX.CombatVFX.BlockHitVFX:Clone()
+						vfx.Position = targetChar.PrimaryPart.Position + Vector3.new(0, 0.9, -1.5)
+						vfx.Parent = workspace
+						debris:AddItem(vfx, 1)
+						for _, emitter in ipairs(vfx:GetDescendants()) do
+							if emitter:IsA("ParticleEmitter") then
+								emitter:Emit(emitter:GetAttribute("EmitCount") or 1)
+							end
+						end
+					end)
+				end
+
+				-- CLEAN HIT LOGIC
+			else
+				SFXModule:PlaySFX("M1HitSFX", character.SFX.ActionSFX)
+				local str = (player:FindFirstChild("Stats") and player.Stats.Strength.Value) or 0
+
+				if combo == 5 then
+					if character:GetAttribute("Airtilting") == 1 then
+						GeneralModule.stun(targetChar, 1.5)
+						local lv = targetChar.PrimaryPart:FindFirstChild("UptiltLv")
+						if lv then
+							local origin = rootPart.Position
+							local direction = Vector3.new(rootPart.CFrame.LookVector.X, -0.65, rootPart.CFrame.LookVector.Z).Unit * 100
+
+							local downslamVFX = rs.VFX.CombatVFX.DownslamVFX:Clone()
+							downslamVFX.CFrame = CFrame.lookAt(origin, origin + direction)
+							downslamVFX.Parent = workspace
+							debris:AddItem(downslamVFX, 3)
+
+							local raycastParams = RaycastParams.new()
+							raycastParams.FilterType = Enum.RaycastFilterType.Exclude
+							raycastParams.FilterDescendantsInstances = {character, targetChar}
+							local result = workspace:Raycast(origin, direction, raycastParams)
+
+							if result and result.Instance then
+								local dist = (result.Position - targetChar.PrimaryPart.Position).Magnitude
+								local speed = 90
+								lv.VectorVelocity = (result.Position - targetChar.PrimaryPart.Position).Unit * speed
+
+								task.delay(dist / speed, function()
+									lv.VectorVelocity = Vector3.new(0, 0, 0)
+									game:GetService("Debris"):AddItem(lv, 1)
+									SFXModule:PlaySFX("GroundSlamSFX" .. math.random(1, 2), character.SFX.ActionSFX)
+									GeneralModule.spawnCrater(targetChar.PrimaryPart, 2)
+									GeneralModule.stun(targetChar, 1.2, false)
+									ragdollModule:Ragdoll(targetChar, 1)
+									GeneralModule.removeAttackingState(character)
+								end)
+
+								local myLv = rootPart:FindFirstChild("UptiltLv")
+								if myLv then myLv:Destroy() end
+							end
+						end
+						character:SetAttribute("Airtilting", -1)
+					else
+						GeneralModule.knockback(character, targetChar, 40)
+						ragdollModule:Ragdoll(targetChar, 1)
+						GeneralModule.stun(targetChar, 1.3)
+						character:SetAttribute("Airtilting", -1)
+					end
+					damage = 8 + (str * 0.3)
+				else
+					if combo > 3 and character:GetAttribute("Airtilting") == 0 then
+						character:SetAttribute("Airtilting", 1)
+
+						local function createUptiltLV(parentPart)
+							local lv = Instance.new("LinearVelocity")
+							lv.Name = "UptiltLv"
+							lv.Attachment0 = parentPart:FindFirstChild("RootAttachment") or Instance.new("Attachment", parentPart)
+							lv.MaxForce = 1e10
+							lv.VectorVelocity = Vector3.new(0, 70, 0)
+							lv.Parent = parentPart
+							task.delay(0.15, function()
+								if lv then lv.VectorVelocity = Vector3.zero end
+							end)
+							return lv
+						end
+
+						createUptiltLV(rootPart)
+						createUptiltLV(targetChar.PrimaryPart)
+						debris:AddItem(targetChar.PrimaryPart:FindFirstChild("UptiltLv"), 3)
+					end
+
+					damage = 5 * (1 + (str * 0.05))
+					GeneralModule.stun(targetChar, 0.8)
+					GeneralModule.knockback(character, targetChar, 10)
+				end
+
+				GeneralModule.createHitEffect(hum.Parent.PrimaryPart.Position + Vector3.new(0, 0.7, 0), hitEffectTemplate)
 			end
+
+			GeneralModule.damageLooks(player, v, damage)
+			hum:TakeDamage(damage)
+			rs.RemoteEvents.NPCEvents.EnemyEvents.UpdateContributors:FireClient(player, hum.Parent, damage)
 		end
-
-
 	end
 end
 
-
 activateM1Event.OnServerEvent:Connect(function(player)
-	player.Character:SetAttribute("M1Activated", not player.Character:GetAttribute("M1Activated"))
-	print(player.Character:GetAttribute("M1Activated"))
-end)
-
-
-local m1CheckList = {
-	"Stunned",
-	"Cooldown",
-	"Blocking",
-	"Charging",
-	"Busy",
-	"Swimming"
-}
-m1Event.OnServerEvent:Connect(function(player)
-	
-
-	
-	local character = player.Character or player.CharacterAdded:Wait()
-	local humanoid = character:WaitForChild("Humanoid")
-	local runService = game:GetService("RunService")
-	local m1Active = false
-	local animator = humanoid:WaitForChild("Animator")
-	local rs = game:GetService("ReplicatedStorage")
-	local damage = 1
-	local cooldown = 0.5
-	local m1IdleFunction = rs.BindableFunctions.M1Function
-	local possibleParts = {"Torso", "Head", "Left Arm", "Right Arm", "Left Leg", "Right Leg"}
-	local hurtAnim1 = game:GetService("ReplicatedStorage").Animations.HurtAnims["hurtAnim (1)"]
-	local hurtAnim2 = game:GetService("ReplicatedStorage").Animations.HurtAnims["hurtAnim (2)"]
-	local anims = combatAnimModule:GetAnimations(player.Character)
-	local last = 2
-
-
-	
-	local humanoidRootPart = character.PrimaryPart
-	
-	local clip
-	if player.Character:GetAttribute("Airtilting") ~= -1 and player.Character:getAttribute("Combo") >3 then
-		clip = anims["M1_"..player.Character:GetAttribute("Combo").."_Airtilt"]
-	else
-		clip = anims["M1_"..player.Character:GetAttribute("Combo")]
-		if player.Character:GetAttribute("Combo") == 1 then
-			clip:AdjustSpeed(1.4)
-		end
+	if player.Character then
+		player.Character:SetAttribute("M1Activated", not player.Character:GetAttribute("M1Activated"))
 	end
-	local m1Speed = clip.Length --0.26--math.max(anims["M1_"..player.Character:GetAttribute("Combo")].Length * 0.55, 0.25)
-	--print("Wait time: "..tostring(m1Speed))
-	
-
-
-	local checks = GeneralModule.checkAll(player, m1CheckList)
-	if checks == false then return end
-		
-		player.Character:SetAttribute("Cooldown", true)
-		player.Character:SetAttribute("Busy", true)
-		task.delay(m1Speed, function()
-			player.Character:SetAttribute("Busy", false)
-		end)
-		GeneralModule.applyAttackingState(player.Character, 0.7)
-		player.Character:SetAttribute("Sprinting", false)
-		
-		
-		
-		player.Character:SetAttribute("Speed", 4)
-		local originalJumpHeight = player.Character.Humanoid.JumpHeight
-		player.Character.Humanoid.JumpPower = 0
-		
-		
-		yieldAllBut(player.Character.Humanoid, "M1 "..player.Character:GetAttribute("Combo"))
-		--print(player.Character:GetAttribute("Combo"))
-		local sfx = rs.SFX.Combat.M1SFX:Clone()
-		sfx.Parent = player.Character.PrimaryPart
-		sfx:Play()
-		game:GetService("Debris"):AddItem(sfx, sfx.TimeLength)
-		
-		clip:Play()
-	GeneralModule.knockback(player.Character, player.Character, 10)
-		task.spawn(function()
-			if player.Character:GetAttribute("Combo") < 5  then
-				task.wait(m1Speed)
-				player.Character:SetAttribute("Cooldown", false)
-			
-			else	
-				task.wait(2)
-				if player.Character then player.Character:SetAttribute("Cooldown", false) end
-				
-			end
-		end)
-		
-		local waitTime = clip.Length * 0.35
-		if player.Character:GetAttribute("Combo") == 5 then
-			waitTime = clip.Length*0.55
-		end
-		task.wait(waitTime)
-		if player.Character:GetAttribute("Stunned") == false then
-			task.spawn(function()
-				castHitbox(player)
-			end)
-			
-		end
-		
-		if player.Character:GetAttribute("Combo") == 5 then
-			player.Character:SetAttribute("Combo", 1)
-		else
-			player.Character:SetAttribute("Combo", player.Character:GetAttribute("Combo")+1)
-		end
-		
-		task.spawn(function()
-			local prev = player.Character:GetAttribute("Combo")
-			task.wait(1.5)
-			if player.Character then if prev == player.Character:GetAttribute("Combo") then
-				local lv = player.Character.PrimaryPart:FindFirstChild("UptiltLv")
-				if lv then
-					lv:Destroy()
-				end
-			end 
-			task.wait(1)
-			if player.Character then 
-				if prev == player.Character:GetAttribute("Combo") then
-					player.Character:SetAttribute("Combo", 1)
-					player.Character.Humanoid.JumpPower = 50
-				end
-			end 
-		end
-		end)
-		
-	
-	
 end)
 
-local parryLength = 0.4
-local blockStartLength = 0.333
-local blockParryLength = 0.25
-local wantToBlock = {}
-
-blockEvent.OnServerEvent:Connect(function(player)
-	--print("Blocking")
-	if player.Character:GetAttribute("Stunned") == true or player.Character:GetAttribute("Attacking") == true or player.Character:GetAttribute("Dashing") == true or player.Character:GetAttribute("Busy") == true then return end
-	
+-- M1 EVENT (Server Hit Processing/Cooldown Management)
+m1Event.OnServerEvent:Connect(function(player, animLength)
 	local character = player.Character
-	local anims = combatAnimModule:GetAnimations(player.Character)
-	yieldAllBut(character.Humanoid, "fdsfdsfd")
+	if not character or not GeneralModule.checkAll(player, m1CheckList) then return end
 
-	task.spawn(function()
-		wantToBlock[player] = true
-		character:SetAttribute("Parrying", true)
-		anims.blockStart:Play()
+	local combo = character:GetAttribute("Combo") 
+	local m1Speed = animLength or 0.4
 
+	character:SetAttribute("Cooldown", true)
+	character:SetAttribute("Busy", true)
+	character:SetAttribute("Sprinting", false)
+	GeneralModule.applyAttackingState(character, 0.7)
+	GeneralModule.addSpeedBuff(player, "M1SpeedBuff", -12)
+
+	SFXModule:PlaySFX("M1SFX", character.SFX.ActionSFX)
+
+	if combo < 5 then
+		GeneralModule.knockback(character, character, 10)
+	end
+
+	--hitbox delay calculation
+	local hitDelay
+	if combo == 5 then
+		hitDelay = m1Speed * 0.65
+	else 
+		if combo == 4 and player.Character:GetAttribute("Airtilting") == 0 then
+			hitDelay = m1Speed * 0.45
+		else 
+			hitDelay = m1Speed * 0.35
+		end
+	
+	end
+	task.delay(hitDelay, function()
+		if character and not character:GetAttribute("Stunned") then
+			castHitbox(player, combo)
+		end
+	end)
+
+	-- Increment combo
+	if combo == 5 then
+		character:SetAttribute("Combo", 1)
+	else
+		character:SetAttribute("Combo", combo + 1)
+	end
+
+	-- Cooldowns
+	task.delay(m1Speed, function()
+		if character then character:SetAttribute("Busy", false) end
+	end)
+
+	local cooldownTime
+	if combo == 5 then
+		cooldownTime = 1.8
+	else 
+		cooldownTime = m1Speed * 0.8
+	end
+	
+	task.delay(cooldownTime, function()
+		if character then 
+			character:SetAttribute("Cooldown", false)
+			GeneralModule.removeSpeedBuff(character, "M1SpeedBuff")
+		end
+	end)
+
+	-- Combo reset
+	local comboChanged = false
+	local conn
+	conn = character:GetAttributeChangedSignal("Combo"):Connect(function()
+		comboChanged = true
+		conn:Disconnect()
+		conn = nil
+	end)
+	task.delay(2.2, function()
+		if character and comboChanged == false then
+			character:SetAttribute("Combo", 1)
+			conn:Disconnect()
+			conn = nil
+			if character:FindFirstChild("Humanoid") then 
+				character.Humanoid.JumpPower = 50 
+			end
+			local uptilt = character.PrimaryPart and character.PrimaryPart:FindFirstChild("UptiltLv")
+			if uptilt then uptilt:Destroy() end
+		end
+	end)
+end)
+
+-- BLOCKING / PARRYING
+blockEvent.OnServerEvent:Connect(function(player)
+	local character = player.Character
+	if not character then return end
+	if character:GetAttribute("Stunned") or character:GetAttribute("Attacking") or 
+		character:GetAttribute("Dashing") or character:GetAttribute("Busy") or 
+		character:GetAttribute("Blocking") or character:GetAttribute("Parrying") then
+		return
+	end
+
+	wantToBlock[player] = true
+	character:SetAttribute("Parrying", true)
+	character:SetAttribute("Sprinting", false)
+
+	GeneralModule.addSpeedBuff(player, "ParrySpeedBuff", -12)
+
+	task.delay(0.333, function()
+		if not character or not character.Parent then return end
+		GeneralModule.removeSpeedBuff(character, "ParrySpeedBuff")
+		character:SetAttribute("Parrying", false)
 		
-		task.wait(blockStartLength)
-		if wantToBlock[player] == true then
+		if wantToBlock[player] then
 			character:SetAttribute("Blocking", true)
-			character:SetAttribute("Parrying", false)
-			anims.block:Play()
-			
+			GeneralModule.addSpeedBuff(player, "BlockSpeedBuff", -12)
+
 			local blockUI = character:FindFirstChild("BlockingGui")
 			if not blockUI then
 				blockUI = rs.UIObjects.BlockingGui:Clone()
 				blockUI.Parent = character
 				blockUI.Adornee = character.Torso
 			end
-			
 		else
 			character:SetAttribute("Blocking", false)
-			character:SetAttribute("Parrying", false)
-			character:SetAttribute("Speed", 16)
-			character.Humanoid.WalkSpeed = character:GetAttribute("Speed")+GeneralModule.getSpeedBuffs(player.Character)
-			
-			local blockUI = character:FindFirstChild("BlockingGui")
-			if blockUI then
-				blockUI:Destroy()
-			end
 		end
-		
 	end)
-	if character:GetAttribute("Sprinting") == true then
-		character:SetAttribute("Sprinting", false)
-	end
-	character:SetAttribute("Speed", 4)
-	character.Humanoid.WalkSpeed = character:GetAttribute("Speed")+GeneralModule.getSpeedBuffs(player.Character)
 end)
 
-rs.RemoteEvents.CombatEvents.UnblockEvent.OnServerEvent:Connect(function(player)
+unblockEvent.OnServerEvent:Connect(function(player)
 	local character = player.Character
+	if not character then return end
+
 	wantToBlock[player] = false
-	
-	if character:GetAttribute("Parrying") == false and character:GetAttribute("Blocking") == true then
-		character:SetAttribute("Blocking", false)
-		character:SetAttribute("Parrying", false)
-		character:SetAttribute("Speed", 16)
-		character.Humanoid.WalkSpeed = character:GetAttribute("Speed")+GeneralModule.getSpeedBuffs(player.Character)
-		yieldAllBut(character.Humanoid, "fdsfdsfdsfs")
-		
-		local blockUI = character:FindFirstChild("BlockingGui")
-		if blockUI then
-			blockUI:Destroy()
-		end
-		
-		rs.RemoteEvents.MovementEvents.MoveEndEvent:FireClient(player)
-	end
-	
-	
+	character:SetAttribute("Blocking", false)
+
+	local blockUI = character:FindFirstChild("BlockingGui")
+	if blockUI then blockUI:Destroy() end
+
+	GeneralModule.removeSpeedBuff(character, "BlockSpeedBuff")
+	GeneralModule.removeSpeedBuff(character, "ParrySpeedBuff")
 end)
 
+airtiltEvent.OnServerEvent:Connect(function(player)
+	local character = player.Character
+	if not character then return end
 
-
-rs.RemoteEvents.CombatEvents.AirtiltEvent.OnServerEvent:Connect(function(player)
-	if player.Character:GetAttribute("Airtilting") == -1 then
-		player.Character:SetAttribute("Airtilting", 0)
+	if character:GetAttribute("Airtilting") == -1 then
+		character:SetAttribute("Airtilting", 0)
+		task.delay(2, function()
+			if character and not character:GetAttribute("Attacking") then
+				character:SetAttribute("Airtilting", -1)
+			end
+		end)
 	end
-	
-	task.delay(2, function()
-		if player.Character:GetAttribute("Attacking") == false then
-			player.Character:SetAttribute("Airtilting", -1)
-		end
-	end)
 end)
