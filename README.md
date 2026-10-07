@@ -2,7 +2,7 @@
 CURRENTLY INCOMPLETE; STILL MIGRATING SCRIPTS
 
 
-Nen Echoes is a game developed in Roblox Studio using Luau. Check it out here: https://www.roblox.com/games/75915313456043/Nen-Echoes. If the link does not work, it's because the game is currently closed access to prevent Roblox's algorithm from hurting the game while it's still under development. 
+Nen Echoes is a game developed in Roblox Studio using Luau. Check it out here: https://www.roblox.com/games/75915313456043/Nen-Echoes. If the link does not work, it's because the game is currently closed access to prevent Roblox's algorithm from hurting the game while it's still under development. You can check out the official website here instead: https://nathantuan.github.io/NenEchoesWebsite/
 
 Navigate to the folder of "ServerScripts" to access scripts run on the server-side and navigate to the folder named "LocalScripts"
 to access scripts run on the client. 
